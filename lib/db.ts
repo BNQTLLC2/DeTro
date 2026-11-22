@@ -137,8 +137,18 @@ async function seed(run: Runner): Promise<void> {
   }
   await run(
     `insert into rooms (name, sort, token)
-     select 'Phòng ' || g, g, ${TOKEN_SQL} from generate_series(1, 9) g
+     select (((g - 1) / 3 + 1) * 100 + (g - 1) % 3 + 1)::text, g, ${TOKEN_SQL} from generate_series(1, 9) g
      where not exists (select 1 from rooms)`,
+    [],
+  );
+  // Chuyển 1 lần: 'Phòng 1'..'Phòng 9' -> 101,102,103,201,...,303 (3 tầng x 3 phòng).
+  await run(
+    `with flag as (
+       insert into settings (key, value) values ('rooms_floor_renamed', '1')
+       on conflict (key) do nothing returning 1
+     )
+     update rooms set name = (((substring(name from 7)::int - 1) / 3 + 1) * 100 + (substring(name from 7)::int - 1) % 3 + 1)::text
+     where exists (select 1 from flag) and name ~ '^Phòng [1-9]$'`,
     [],
   );
   await run(
