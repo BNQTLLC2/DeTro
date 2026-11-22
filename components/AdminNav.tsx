@@ -15,7 +15,7 @@ export function AdminNav() {
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="fixed inset-x-0 bottom-0 z-20 grid h-[72px] grid-cols-4 border-t border-line bg-surface md:static md:h-auto md:max-w-xl md:grid-cols-4 md:gap-1 md:border-0 md:bg-transparent"
+      className="fixed inset-x-0 bottom-0 z-20 grid min-h-[72px] grid-cols-4 border-t border-line bg-surface md:static md:h-auto md:max-w-xl md:grid-cols-4 md:gap-1 md:border-0 md:bg-transparent"
     >
       {items.map((it) => {
         const active = it.href === "/admin" ? path === "/admin" : path.startsWith(it.href);
@@ -24,7 +24,7 @@ export function AdminNav() {
             key={it.href}
             href={it.href}
             aria-current={active ? "page" : undefined}
-            className={`flex flex-col items-center justify-center gap-1 text-xs no-underline md:min-h-11 md:flex-row md:justify-center md:gap-2 md:rounded-xl md:text-sm ${
+            className={`flex flex-col items-center justify-center gap-1 py-2 text-[14px] leading-tight no-underline md:min-h-11 md:flex-row md:justify-center md:gap-2 md:rounded-xl md:text-sm ${
               active ? "font-semibold text-accent md:bg-accent-soft" : "text-muted"
             }`}
           >

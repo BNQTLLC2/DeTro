@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PaymentWatcher } from "@/components/AutoRefresh";
 import { CopyTextButton } from "@/components/CopyButton";
+import { FontSizeToggle } from "@/components/FontSizeToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   dmy,
@@ -58,7 +59,10 @@ export default async function TenantPage({
           {room.occupants} người
         </p>
       </div>
-      <ThemeToggle />
+      <div className="flex shrink-0 items-center gap-2">
+        <FontSizeToggle />
+        <ThemeToggle />
+      </div>
     </header>
   );
 

@@ -6,8 +6,8 @@
   --bg: #f4f3ee;
   --surface: #ffffff;
   --ink: #1c201e;
-  --muted: #5c6560;
-  --line: #e2e0d8;
+  --muted: #444d48;
+  --line: #d3d0c5;
   --accent: #0b6b5f;
   --accent-ink: #ffffff;
   --accent-soft: #dcefea;
@@ -31,7 +31,7 @@
   --bg: #121614;
   --surface: #1b201e;
   --ink: #eceeec;
-  --muted: #a3aca7;
+  --muted: #bcc4bf;
   --line: #2c3330;
   --accent: #5cc8b5;
   --accent-ink: #06201b;
@@ -53,6 +53,10 @@
 }
 
 @theme inline {
+  /* Chữ nhỏ không nhỏ hơn ~16px ở cỡ mặc định */
+  --text-xs: 0.9rem;
+  --text-sm: 1rem;
+
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-ink: var(--ink);
@@ -81,10 +85,19 @@
 html {
   background: var(--bg);
   color: var(--ink);
+  /* Cỡ chữ gốc lớn hơn mặc định (18px) cho người lớn tuổi; chọn được 3 mức bằng nút "Aa". */
+  font-size: 112.5%;
+}
+html[data-fs="l"] {
+  font-size: 125%;
+}
+html[data-fs="xl"] {
+  font-size: 140%;
 }
 
 body {
   font-family: var(--font-sans);
+  line-height: 1.55;
   font-variant-numeric: tabular-nums;
   -webkit-text-size-adjust: 100%;
 }
@@ -101,7 +114,7 @@ body {
   .btn-primary,
   .btn-ghost,
   .btn-danger {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold no-underline transition-opacity disabled:cursor-not-allowed disabled:opacity-45;
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 text-base font-semibold no-underline transition-opacity disabled:cursor-not-allowed disabled:opacity-45;
   }
   .btn-primary {
     @apply border-accent bg-accent text-accent-ink;
@@ -116,9 +129,9 @@ body {
     @apply min-h-12 w-full rounded-xl border border-line bg-bg px-3 text-base text-ink placeholder:text-muted;
   }
   .label {
-    @apply mb-1 block text-xs text-muted;
+    @apply mb-1 block text-sm font-medium text-muted;
   }
   .chip {
-    @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    @apply inline-block rounded-full px-3 py-1 text-sm font-semibold;
   }
 }

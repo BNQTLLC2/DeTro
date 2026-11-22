@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AdminNav } from "@/components/AdminNav";
+import { FontSizeToggle } from "@/components/FontSizeToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/queries";
@@ -18,6 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <p className="truncate text-lg font-bold">{settings.house_name}</p>
         </div>
         <div className="flex items-center gap-2">
+          <FontSizeToggle />
           <ThemeToggle />
           <form method="post" action="/api/logout">
             <button type="submit" className="btn-ghost">

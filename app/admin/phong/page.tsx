@@ -100,7 +100,7 @@ export default async function RoomsPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] text-muted">{label}</dt>
+      <dt className="text-xs text-muted">{label}</dt>
       <dd className="truncate text-sm font-semibold">{value}</dd>
     </div>
   );

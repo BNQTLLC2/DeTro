@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 };
 
 // Chạy trước khi vẽ trang để không bị nháy sáng/tối.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)}catch(e){}})()`;
+const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);var f=localStorage.getItem('fs');if(f==='l'||f==='xl')document.documentElement.dataset.fs=f}catch(e){}})()`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

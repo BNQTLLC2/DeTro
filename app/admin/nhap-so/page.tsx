@@ -151,7 +151,7 @@ export default async function EnterReadings({
               >
                 <Dot on={rr?.elecState === "ok"} color="bg-c-elec" />
                 <Dot on={rr?.waterState === "ok"} color="bg-c-water" />
-                <span className="ml-1 text-[11px] text-muted">{done}/2</span>
+                <span className="ml-1 text-xs text-muted">{done}/2</span>
               </span>
             </Link>
           );
