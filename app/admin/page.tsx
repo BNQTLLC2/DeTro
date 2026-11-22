@@ -302,7 +302,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="grid grid-cols-3 items-stretch gap-2 sm:gap-3">
+                <ul className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3 sm:gap-3">
                   {f.rows.map((r) => (
                     <li key={r.room.id}>
                       <RoomTile
@@ -503,11 +503,11 @@ function RoomTile({
       }`}
     >
       <div className="px-3 pt-3 pb-2">
-        <span className="block truncate text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
-        <p className={`truncate text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
+        <span className="block break-words text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
+        <p className={`break-words text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
           {room.tenant_name || "Chưa có tên"}
         </p>
-        <p className="truncate text-xs text-muted">
+        <p className="break-words text-xs text-muted">
           {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
           {room.occupants} người
         </p>
@@ -517,14 +517,14 @@ function RoomTile({
         {parts.map((p) => {
           const d = DOT[p.status];
           return (
-            <div key={p.key} className="flex items-center gap-2 text-xs text-muted">
+            <div key={p.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
               <span
                 className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
                 aria-hidden="true"
               >
                 {d.icon}
               </span>
-              <span className="truncate">{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
+              <span>{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
               <span className="ml-auto whitespace-nowrap font-semibold text-ink">
                 {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
               </span>
@@ -545,7 +545,7 @@ function RoomTile({
 
       <div className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold ${ACTION_TONE[action]}`}>
         <span aria-hidden="true">{actionIcon}</span>
-        <span className="truncate">{actionLabel}</span>
+        <span className="min-w-0 break-words">{actionLabel}</span>
         <span className="ml-auto" aria-hidden="true">
           ›
         </span>
