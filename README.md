@@ -2,7 +2,7 @@
 
 Web để chủ trọ nhập số điện/nước hàng tháng cho từng phòng, tự tính hóa đơn (tiền phòng + điện + nước + rác + các phí khác) và **công bố** cho người thuê xem qua một link riêng.
 
-- **Chủ trọ**: đăng nhập bằng một mật khẩu, nhập số từng phòng (điện và nước lưu riêng, có thể nhập vào hai ngày khác nhau), công bố từng phòng hoặc tất cả, đánh dấu đã thu, gửi link qua Zalo/SMS.
+- **Chủ trọ**: đăng nhập bằng một mật khẩu, nhập số từng phòng (điện và nước lưu riêng, có thể nhập vào hai ngày khác nhau), công bố từng phòng hoặc tất cả, đánh dấu đã thu, gửi link qua Zalo.
 - **Người thuê**: mở link riêng của phòng (`/p/<mã dài khó đoán>`), không cần đăng nhập. Chỉ thấy các tháng đã công bố, có điện/nước giải thích dễ hiểu, biểu đồ 6 tháng và mã QR chuyển khoản.
 - Next.js (App Router) + TypeScript + Tailwind CSS, database Neon Postgres.
 
@@ -23,7 +23,6 @@ Web để chủ trọ nhập số điện/nước hàng tháng cho từng phòng
 Các bảng database và dữ liệu khởi tạo (9 phòng trống, phí rác và wifi) được tạo tự động ở lần mở web đầu tiên, không cần chạy lệnh migration.
 
 ## Chạy thử trên máy
-
 
 ```bash
 npm install
@@ -73,9 +72,9 @@ Hãy lưu đường dẫn này vào bookmark. Quên thì xem lại biến `ADMIN
 - Đăng nhập sai 5 lần trong 15 phút từ một địa chỉ IP sẽ bị khóa tạm.
 - Link người thuê là mã ngẫu nhiên 128 bit, chỉ đọc, không cho công cụ tìm kiếm lập chỉ mục. Khi người thuê trả phòng hoặc đổi người, bấm **Tạo lại link** ở mục Phòng để link cũ không dùng được nữa.
 
-## Gửi link qua Zalo / SMS
+## Gửi link qua Zalo
 
-Nút "Gửi qua Zalo" sao chép sẵn tin nhắn rồi mở khung chat Zalo của số điện thoại đã lưu (`https://zalo.me/84<số bỏ số 0 đầu>`), bạn dán và gửi. Cần số đó có Zalo và cho phép tìm bằng số điện thoại. Nút "Gửi SMS" mở ứng dụng nhắn tin với nội dung điền sẵn.
+Nút "Gửi qua Zalo" sao chép sẵn tin nhắn rồi mở khung chat Zalo của số điện thoại đã lưu (`https://zalo.me/84<số bỏ số 0 đầu>`), bạn dán và gửi. Cần số đó có Zalo và cho phép tìm bằng số điện thoại.
 
 ## Cài lên màn hình điện thoại (PWA)
 

@@ -5,7 +5,6 @@ import { useState } from "react";
 /**
  * Gửi link hóa đơn cho người thuê theo số điện thoại đã lưu.
  * - Zalo: sao chép sẵn tin nhắn rồi mở khung chat Zalo của số đó (dán và gửi).
- * - SMS: mở ứng dụng nhắn tin với nội dung điền sẵn.
  * Không dùng được khi phòng chưa công bố hoặc chưa có số điện thoại.
  */
 export function SendLink({
@@ -34,10 +33,6 @@ export function SendLink({
     window.open(`https://zalo.me/${zaloNumber}`, "_blank", "noopener");
   }
 
-  function sms() {
-    location.href = `sms:${phone}?&body=${encodeURIComponent(full())}`;
-  }
-
   if (!phone) {
     return <p className="text-xs text-muted">Chưa có số điện thoại, thêm ở mục Phòng để gửi link.</p>;
   }
@@ -47,9 +42,6 @@ export function SendLink({
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={zalo} className="btn-primary">
           Gửi qua Zalo
-        </button>
-        <button type="button" onClick={sms} className="btn-ghost">
-          Gửi SMS
         </button>
       </div>
       {note ? <p className="text-xs text-muted">{note}</p> : null}

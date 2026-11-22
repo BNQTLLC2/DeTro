@@ -197,6 +197,19 @@ export async function regenerateTokenAction(fd: FormData) {
   });
 }
 
+/** Đổi link ngay trên trang (không tải lại), trả về mã mới. */
+export async function regenerateTokenInlineAction(id: number): Promise<{ token: string } | { error: string }> {
+  await requireAdmin();
+  try {
+    await Q.regenerateToken(id);
+    const room = await Q.getRoom(id);
+    if (!room) return { error: "Không tìm thấy phòng." };
+    return { token: room.token };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Có lỗi xảy ra." };
+  }
+}
+
 /* --------------------------------- Cài đặt -------------------------------- */
 
 export async function saveSettingsAction(fd: FormData) {
