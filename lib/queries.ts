@@ -182,6 +182,20 @@ export async function saveSettings(p: Partial<Record<Exclude<keyof Settings, "se
   }
 }
 
+/**
+ * Áp giá điện/nước hiện hành (cài đặt) cho hóa đơn của kỳ `period` chưa từng công bố.
+ * Hóa đơn đã công bố giữ nguyên giá đã chốt. Trả về số hóa đơn được cập nhật.
+ */
+export async function applyPricesToPeriod(period: string): Promise<number> {
+  const s = await getSettings();
+  const rows = await q(
+    `update invoices set elec_price=$2, water_quota=$3, water_low=$4, water_high=$5
+     where period=$1 and published_at is null returning id`,
+    [period, s.elec_price, s.water_quota, s.water_low, s.water_high],
+  );
+  return rows.length;
+}
+
 /* ---------------------------------- Phòng --------------------------------- */
 
 export async function listRooms(): Promise<Room[]> {

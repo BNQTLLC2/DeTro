@@ -60,10 +60,10 @@ Hãy lưu đường dẫn này vào bookmark. Quên thì xem lại biến `ADMIN
 ## Quy tắc tính tiền
 
 - **Điện** = (số cuối − số đầu) × giá điện/kWh.
-- **Nước** theo số người: định mức = số người × m³ giá rẻ mỗi người. Phần trong định mức tính giá rẻ, phần vượt tính giá cao.
+- **Nước** theo số người: định mức = số người × số khối nước định mức cho mỗi người. Phần trong định mức tính giá rẻ, phần vượt tính giá cao.
 - **Phí khác** (rác, wifi, gửi xe...): thêm/bớt trong Cài đặt; mỗi phòng bật/tắt và đặt mức riêng ở mục Phòng. Phí bằng 0 không hiện.
 - **Khoản phát sinh** theo tháng, cho phép số âm để giảm trừ.
-- Số đầu kỳ tự lấy từ số cuối kỳ trước. Hóa đơn lưu bản chụp giá, nên đổi giá sau này không làm đổi hóa đơn đã công bố.
+- Số đầu kỳ tự lấy từ số cuối kỳ trước. Hóa đơn lưu bản chụp giá: lưu Cài đặt sẽ áp giá mới ngay cho hóa đơn tháng hiện tại chưa công bố, còn hóa đơn đã công bố giữ nguyên giá cũ.
 - Sửa số hoặc khoản phát sinh của hóa đơn đã công bố thì hóa đơn tự về "chưa công bố" để bạn kiểm tra rồi công bố lại.
 
 ## Bảo mật

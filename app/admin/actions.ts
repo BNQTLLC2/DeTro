@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { isPeriod } from "@/lib/format";
+import { currentPeriod, isPeriod, periodName } from "@/lib/format";
 import type { FeeMethod } from "@/lib/billing";
 import * as Q from "@/lib/queries";
 
@@ -207,9 +207,9 @@ export async function regenerateTokenInlineAction(id: number): Promise<{ token: 
 
 export async function saveSettingsAction(fd: FormData) {
   await requireAdmin();
-  await run("/admin/cai-dat", "Đã lưu cài đặt. Hóa đơn đã công bố giữ nguyên giá cũ.", async () => {
+  await run("/admin/cai-dat", "", async () => {
     const quota = numOf(fd, "water_quota");
-    if (quota === null || quota < 0) throw new Error("Định mức nước không hợp lệ.");
+    if (quota === null || quota < 0) throw new Error("Số khối nước định mức không hợp lệ.");
     await Q.saveSettings({
       house_name: str(fd, "house_name") || "Nhà trọ",
       elec_price: Math.max(intOf(fd, "elec_price"), 0),
@@ -218,6 +218,12 @@ export async function saveSettingsAction(fd: FormData) {
       water_high: Math.max(intOf(fd, "water_high"), 0),
       due_days: Math.max(intOf(fd, "due_days", 5), 0),
     });
+    // Giá mới áp dụng luôn cho hóa đơn tháng hiện tại (chưa công bố).
+    const period = currentPeriod();
+    const n = await Q.applyPricesToPeriod(period);
+    return n > 0
+      ? `Đã lưu cài đặt và áp dụng giá mới cho ${n} hóa đơn ${periodName(period)}. Hóa đơn đã công bố giữ nguyên giá cũ.`
+      : "Đã lưu cài đặt. Hóa đơn đã công bố giữ nguyên giá cũ.";
   });
 }
 

@@ -105,6 +105,36 @@ describe("luồng chủ trọ -> người thuê", () => {
     expect(inv.adjustments).toEqual([{ name: "Giảm trừ", amount: -20000 }]);
   });
 
+  it("đổi giá áp dụng ngay cho hóa đơn kỳ chỉ định chưa công bố, bỏ qua hóa đơn đã công bố và kỳ khác", async () => {
+    const rooms = await Qm.listRooms();
+    const [a, b] = rooms.slice(-2);
+    const period = "2026-08";
+    const before = await Qm.getSettings();
+
+    await Qm.saveReading(a.id, period, "elec", 0, 100);
+    await Qm.saveReading(a.id, period, "water", 0, 5);
+    await Qm.saveReading(b.id, period, "elec", 0, 100);
+    await Qm.saveReading(b.id, "2026-07", "elec", 0, 50); // kỳ khác
+    await Qm.publishInvoice(a.id, period); // chốt giá cũ
+
+    await Qm.saveSettings({ elec_price: 4200, water_quota: 5, water_low: 8000, water_high: 20000 });
+    expect(await Qm.applyPricesToPeriod(period)).toBe(1); // chỉ hóa đơn của b
+
+    const ia = (await Qm.getInvoice(a.id, period))!;
+    expect(ia.elec_price).toBe(before.elec_price); // đã công bố -> giữ giá cũ
+    const ib = (await Qm.getInvoice(b.id, period))!;
+    expect([ib.elec_price, ib.water_quota, ib.water_low, ib.water_high]).toEqual([4200, 5, 8000, 20000]);
+    const other = (await Qm.getInvoice(b.id, "2026-07"))!;
+    expect(other.elec_price).toBe(before.elec_price); // kỳ khác không bị đụng
+
+    await Qm.saveSettings({
+      elec_price: before.elec_price,
+      water_quota: before.water_quota,
+      water_low: before.water_low,
+      water_high: before.water_high,
+    });
+  });
+
   it("đổi link của phòng làm link cũ không còn dùng được", async () => {
     const [room] = await Qm.listRooms();
     expect((await Qm.getRoomByToken(room.token))?.id).toBe(room.id);

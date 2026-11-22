@@ -47,10 +47,10 @@ export default async function SettingsPage({
           <Head
             icon="💧"
             title="Tiền nước"
-            hint="Mỗi người được một lượng nước giá rẻ, dùng quá thì tính giá cao."
+            hint="Mỗi người có một số khối nước định mức tính giá thấp, dùng vượt thì tính giá cao."
           />
           <T
-            label="Nước giá rẻ cho mỗi người"
+            label="Số khối nước định mức cho mỗi người"
             name="water_quota"
             value={String(s.water_quota)}
             dec
@@ -75,8 +75,8 @@ export default async function SettingsPage({
         </section>
 
         <p className="text-xs text-muted">
-          Đổi giá chỉ áp dụng cho hóa đơn chưa công bố. Hóa đơn đã công bố giữ
-          nguyên giá cũ.
+          Đổi giá sẽ áp dụng ngay cho hóa đơn tháng hiện tại chưa công bố. Hóa
+          đơn đã công bố giữ nguyên giá cũ.
         </p>
         <button type="submit" className="btn-primary">
           Lưu cài đặt
