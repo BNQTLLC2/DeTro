@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { SendLink } from "@/components/SendLink";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import {
   moneyD,
   currentPeriod,
@@ -28,9 +28,14 @@ import {
   publishRoomAction,
   setPaidAction,
   unpublishRentAction,
+  unpublishRoomAction,
 } from "./actions";
 
 export const metadata = { title: "Tổng quan tháng" };
+
+/** Nút phụ dạng chữ (hủy công bố, bỏ đánh dấu): nhỏ gọn, không tranh chỗ với nút chính. */
+const SUBTLE =
+  "min-h-11 w-full cursor-pointer rounded-xl text-center text-sm font-semibold text-muted underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-45";
 
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 
@@ -414,11 +419,8 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                           ) : null}
 
                           {p.status === "unpaid" ? (
-                            <div className="flex flex-wrap gap-2">
-                              <ActionForm
-                                action={setPaidAction}
-                                className="min-w-0 flex-1 basis-40"
-                              >
+                            <div className="flex flex-col gap-1">
+                              <ActionForm action={setPaidAction}>
                                 <Hidden {...hidden} />
                                 <input type="hidden" name="part" value={p.key} />
                                 <input type="hidden" name="paid" value="1" />
@@ -426,32 +428,26 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                                   Đã thu {p.key === "rent" ? "tiền trọ" : "chi phí khác"}
                                 </SubmitButton>
                               </ActionForm>
-                              {inv && p.amount !== null ? (
-                                <SendLink
-                                  compact
-                                  path={`/p/${room.token}`}
-                                  phone={room.tenant_phone.replace(/\D/g, "")}
-                                  message={`Chào ${room.tenant_name || "bạn"}, ${p.key === "rent" ? "tiền trọ" : "tiền điện, nước và các chi phí khác"} ${room.name} tháng ${periodLabel(period)} là ${moneyD(p.amount)}, hạn ${p.due}. Xem chi tiết tại: {link}`}
-                                />
-                              ) : null}
+                              <ActionForm action={p.key === "rent" ? unpublishRentAction : unpublishRoomAction}>
+                                <Hidden {...hidden} />
+                                <ConfirmButton
+                                  message={`Hủy công bố ${p.key === "rent" ? "tiền trọ" : "điện, nước, phí khác"} của ${room.name}? Người thuê sẽ không còn thấy khoản này.`}
+                                  className={SUBTLE}
+                                  pendingText="Đang hủy..."
+                                >
+                                  Hủy công bố
+                                </ConfirmButton>
+                              </ActionForm>
                             </div>
                           ) : null}
 
-                          {p.status === "paid" || (p.key === "rent" && p.status === "unpaid") ? (
-                            <ActionForm
-                              action={
-                                p.status === "paid" ? setPaidAction : unpublishRentAction
-                              }
-                            >
+                          {p.status === "paid" ? (
+                            <ActionForm action={setPaidAction}>
                               <Hidden {...hidden} />
-                              {p.status === "paid" ? (
-                                <>
-                                  <input type="hidden" name="part" value={p.key} />
-                                  <input type="hidden" name="paid" value="0" />
-                                </>
-                              ) : null}
-                              <SubmitButton className="btn-ghost w-full" pendingText="Đang lưu...">
-                                {p.status === "paid" ? "Bỏ đánh dấu đã thu" : "Hủy công bố tiền trọ"}
+                              <input type="hidden" name="part" value={p.key} />
+                              <input type="hidden" name="paid" value="0" />
+                              <SubmitButton className={SUBTLE} pendingText="Đang lưu...">
+                                Bỏ đánh dấu đã thu
                               </SubmitButton>
                             </ActionForm>
                           ) : null}

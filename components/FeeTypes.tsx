@@ -8,7 +8,7 @@ const METHODS = (Object.keys(FEE_METHOD_LABEL) as FeeMethod[]).map((m) => ({
 }));
 
 /**
- * Thêm khoản phí mới từ trang Nhập số: loại phí hằng tháng (gửi xe, giặt đồ...)
+ * Thêm khoản phí hoặc giảm giá từ trang Nhập số: loại phí hằng tháng (gửi xe, giặt đồ...)
  * hoặc khoản chỉ tính tháng này (sửa chữa, đền bù, giảm trừ).
  * Loại phí mới chỉ bật cho phòng hiện tại, các phòng khác để tắt.
  */
@@ -29,7 +29,7 @@ export function FeeTypes({
         >
           +
         </span>
-        Thêm khoản phí mới
+        Thêm khoản phí hoặc giảm giá
       </summary>
       <AddFeeForm
         roomId={roomId}

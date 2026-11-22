@@ -234,7 +234,7 @@ export default async function EnterReadings({
           </div>
           {feeRows.length === 0 ? (
             <p className="text-sm text-muted">
-              Chưa có loại phí nào. Thêm ở phần &quot;Thêm khoản phí mới&quot;
+              Chưa có loại phí nào. Thêm ở phần &quot;Thêm khoản phí hoặc giảm giá&quot;
               bên dưới.
             </p>
           ) : null}
