@@ -564,7 +564,7 @@ export async function publishRent(roomId: number, period: string): Promise<void>
   if (room.rent <= 0) throw new Error("Phòng này chưa có tiền trọ. Nhập tiền trọ ở trang phòng trước.");
   const inv = await ensureInvoice(room, period);
   // Chưa công bố gì thì lấy tiền trọ hiện tại của phòng; đã công bố thì giữ mức đã chốt.
-  if (!inv.published_at && !inv.rent_published) await q("update invoices set rent=$2 where id=$1", [inv.id, room.rent]);
+  if (!inv.rent_published && (!inv.published_at || inv.rent <= 0)) await q("update invoices set rent=$2 where id=$1", [inv.id, room.rent]);
   await q("update invoices set rent_published = true, rent_auto_done = true where id = $1", [inv.id]);
   const fresh = await getInvoiceById(inv.id);
   if (fresh) await settleInvoice(fresh, "rent", todayVN());

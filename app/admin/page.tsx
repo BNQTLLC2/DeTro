@@ -53,7 +53,10 @@ type PartInfo = {
 };
 
 function rentPart(room: Room, inv: Invoice | undefined, period: string): PartInfo | null {
-  const amount = inv?.rent ?? room.rent;
+  // Hóa đơn có thể được tạo từ lúc phòng chưa có giá (rent = 0): chỉ tin số đã chốt khi đã công bố
+  // và lớn hơn 0, còn lại lấy giá hiện tại của phòng.
+  const locked = inv?.rent_published && inv.rent > 0 ? inv.rent : 0;
+  const amount = locked || room.rent;
   if (amount <= 0) return null;
   const status: Status = !inv?.rent_published ? "draft" : inv.rent_paid_at ? "paid" : "unpaid";
   return {
