@@ -30,6 +30,8 @@ describe("mã thanh toán và QR", () => {
     expect(parsePaymentTarget("DETRO", "MBVCB.9 DETRO PHONG1 TIENTRO 11 2026", rooms)).toEqual({ roomId: 1, period: "2026-11", part: "rent" });
     expect(parsePaymentTarget("DETRO", "DETROPHONG11TIENTRO112026", rooms)).toEqual({ roomId: 11, period: "2026-11", part: "rent" });
     expect(parsePaymentTarget("DETRO", "DETRO_PHONG1_11/2026", rooms)).toEqual({ roomId: 1, period: "2026-11", part: "other" });
+    expect(parsePaymentTarget("DETRO", "DETRO_PHONG1_TONG_11/2026", rooms)).toEqual({ roomId: 1, period: "2026-11", part: "all" });
+    expect(parsePaymentTarget("DETRO", "DETROPHONG11TONG112026", rooms)).toEqual({ roomId: 11, period: "2026-11", part: "all" });
     expect(parsePaymentTarget("DETRO", "DETRO_PHONG1_TIENTRO_13/2026", rooms)).toBeNull();
     // Mã cũ không có TIENTRO vẫn được hiểu là chi phí khác
     expect(parsePaymentRef("DETRO", "DETRO_PHONG1_TIENTRO_11/2026", rooms)).toBeNull();

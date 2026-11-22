@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const inv = Number(req.nextUrl.searchParams.get("inv"));
-  const part = req.nextUrl.searchParams.get("part") === "rent" ? "rent" : "other";
+  const partParam = req.nextUrl.searchParams.get("part");
+  const part = partParam === "rent" ? "rent" : partParam === "all" ? "all" : "other";
   const st = Number.isInteger(inv) ? await paymentStatus(token, inv, part) : null;
   if (!st) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
   return NextResponse.json(st, { headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });

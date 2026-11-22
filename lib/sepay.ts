@@ -22,18 +22,25 @@ export function isValidPrefix(p: string): boolean {
 
 export type PaymentPart = "rent" | "other";
 
+/** Đợt thu của một giao dịch: tiền trọ, chi phí khác, hoặc gộp cả hai trong một lần chuyển ("all"). */
+export type PayTarget = PaymentPart | "all";
+
 /** Từ khóa phân biệt đợt thu tiền trọ trong nội dung chuyển khoản. */
 const RENT_TAG = "TIENTRO";
+/** Từ khóa của mã QR gộp (tiền trọ + điện, nước, phí khác chuyển một lần). */
+const ALL_TAG = "TONG";
 
 /**
  * Nội dung chuyển khoản, mỗi đợt thu một mã riêng (`period` dạng "YYYY-MM"):
  * - Chi phí khác (điện, nước, phí): "<TIỀN TỐ>_<TÊN PHÒNG>_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_11/2026".
  * - Tiền trọ: "<TIỀN TỐ>_<TÊN PHÒNG>_TIENTRO_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_TIENTRO_11/2026".
+ * - Gộp cả hai: "<TIỀN TỐ>_<TÊN PHÒNG>_TONG_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_TONG_11/2026".
  */
-export function paymentContent(prefix: string, roomName: string, period: string, part: PaymentPart = "other"): string {
+export function paymentContent(prefix: string, roomName: string, period: string, part: PayTarget = "other"): string {
   const [y, m] = period.split("-");
   const name = compact(roomName);
-  return [prefix.toUpperCase(), name, part === "rent" ? RENT_TAG : "", `${m}/${y}`].filter(Boolean).join("_");
+  const tag = part === "rent" ? RENT_TAG : part === "all" ? ALL_TAG : "";
+  return [prefix.toUpperCase(), name, tag, `${m}/${y}`].filter(Boolean).join("_");
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -70,18 +77,18 @@ export function parsePaymentTarget(
   prefix: string,
   content: string,
   rooms: { id: number; name: string }[],
-): { roomId: number; period: string; part: PaymentPart } | null {
+): { roomId: number; period: string; part: PayTarget } | null {
   if (!isValidPrefix(prefix)) return null;
   const text = compact(content);
   for (const r of rooms) {
     const name = compact(r.name);
     if (!name) continue;
-    const re = new RegExp(`${escapeRe(compact(prefix))}${escapeRe(name)}(${RENT_TAG})?(\\d{2})(20\\d{2})(?!\\d)`);
+    const re = new RegExp(`${escapeRe(compact(prefix))}${escapeRe(name)}(${RENT_TAG}|${ALL_TAG})?(\\d{2})(20\\d{2})(?!\\d)`);
     const m = re.exec(text);
     if (!m) continue;
     const month = Number(m[2]);
     if (month < 1 || month > 12) continue;
-    return { roomId: r.id, period: `${m[3]}-${m[2]}`, part: m[1] ? "rent" : "other" };
+    return { roomId: r.id, period: `${m[3]}-${m[2]}`, part: m[1] === RENT_TAG ? "rent" : m[1] === ALL_TAG ? "all" : "other" };
   }
   return null;
 }

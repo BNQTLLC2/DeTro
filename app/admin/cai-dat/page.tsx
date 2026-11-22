@@ -28,7 +28,7 @@ export default async function SettingsPage({
             name="fee_day"
             value={String(s.fee_day)}
             num
-            unit="ngày"
+            prefix="Ngày"
           />
           <p className="-mt-1 text-sm text-muted">
             Điện, nước, rác, wifi... thu một lần vào ngày này (ngày thu đầu tiên
@@ -123,6 +123,7 @@ function T({
   span,
   placeholder,
   unit,
+  prefix,
 }: {
   label: string;
   name: string;
@@ -133,6 +134,7 @@ function T({
   span?: boolean;
   placeholder?: string;
   unit?: string;
+  prefix?: string;
 }) {
   return (
     <label className={span ? "col-span-2 block" : "block"}>
@@ -146,8 +148,13 @@ function T({
             defaultValue={value}
             inputMode={num ? "numeric" : dec ? "decimal" : undefined}
             placeholder={placeholder}
-            className={unit ? "input pr-20" : "input"}
+            className={`${unit ? "input pr-20" : "input"}${prefix ? " pl-16" : ""}`}
           />
+        )}
+        {prefix && (
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted">
+            {prefix}
+          </span>
         )}
         {unit && (
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted">

@@ -28,7 +28,7 @@ import {
   receivedFor,
   type Invoice,
 } from "@/lib/queries";
-import { paymentContent, sepayQrUrl, type PaymentPart } from "@/lib/sepay";
+import { paymentContent, sepayQrUrl, type PayTarget } from "@/lib/sepay";
 
 export const dynamic = "force-dynamic";
 
@@ -121,8 +121,14 @@ export default async function TenantPage({
   // Thanh toán: mỗi đợt một QR SePay, số tiền = còn thiếu, nội dung có mã riêng từng đợt để tự khớp
   const bankReady = settings.bank_code !== "" && settings.bank_account !== "";
   const autoConfirm = !!process.env.SEPAY_API_KEY;
-  const payInfo = async (part: PaymentPart, total: number, paid: boolean) => {
-    const received = paid ? 0 : await receivedFor(inv.id, part);
+  // Hai đợt thu cùng chưa đóng (tiền trọ đã công bố mà điện, nước, phí khác vẫn chưa đóng): gộp thành 1 QR duy nhất.
+  const merged = rentShown && otherShown && !rentPaid && !otherPaid;
+  const payInfo = async (part: PayTarget, total: number, paid: boolean) => {
+    const received = paid
+      ? 0
+      : part === "all"
+        ? (await receivedFor(inv.id, "rent")) + (await receivedFor(inv.id, "other"))
+        : await receivedFor(inv.id, part);
     const remaining = Math.max(total - received, 0);
     const content = paymentContent(settings.sepay_prefix, room.name, inv.period, part);
     const qrReady = !paid && bankReady;
@@ -139,8 +145,10 @@ export default async function TenantPage({
       qrDownloadUrl: qrReady ? sepayQrUrl({ ...opts, download: true }) : "",
     };
   };
-  const rentPay = rentShown ? await payInfo("rent", inv.rent, rentPaid) : null;
-  const otherPay = otherShown ? await payInfo("other", res.othersTotal, otherPaid) : null;
+  const rentPay = rentShown && !merged ? await payInfo("rent", inv.rent, rentPaid) : null;
+  const otherPay = otherShown && !merged ? await payInfo("other", res.othersTotal, otherPaid) : null;
+  const allPay = merged ? await payInfo("all", inv.rent + res.othersTotal, false) : null;
+  const payList = [allPay, rentPay, otherPay];
   const invState = (i: Invoice) => {
     const rentOpen = i.rent_published && i.rent > 0 && !i.rent_paid_at;
     const otherOpen = i.published && !i.paid_at;
@@ -153,7 +161,7 @@ export default async function TenantPage({
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-md flex-col gap-4 overflow-x-clip px-4 py-6">
-      {[rentPay, otherPay].map((p) =>
+      {payList.map((p) =>
         p && !p.qrReady ? (
           <PaymentWatcher key={p.part} token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} />
         ) : null,
@@ -344,13 +352,14 @@ export default async function TenantPage({
       ) : null}
 
       {/* Chuyển khoản: mỗi đợt thu một mã QR và nội dung riêng */}
-      {rentPay?.qrReady && otherPay?.qrReady ? (
-        <section className="rounded-2xl border border-warn bg-warn-bg p-4 text-sm font-medium text-warn">
-          Bạn có <b>2 khoản riêng</b>, mỗi khoản một mã QR: <b>Tiền trọ {moneyD(rentPay.remaining)}</b> và{" "}
-          <b>Điện, nước, phí khác {moneyD(otherPay.remaining)}</b>. Hãy chuyển lần lượt từng khoản, quét đúng mã QR của khoản đó.
-        </section>
-      ) : null}
       {[
+        {
+          p: allPay,
+          title: "Chuyển khoản một lần: tiền trọ, điện, nước và các phí khác",
+          what: "tất cả các khoản",
+          edge: "!border-l-accent",
+          chip: "bg-accent text-accent-ink",
+        },
         { p: rentPay, title: "Chuyển khoản tiền trọ", what: "tiền trọ", edge: "!border-l-c-rent", chip: "bg-c-rent text-white" },
         { p: otherPay, title: "Chuyển khoản điện, nước và các phí khác", what: "điện, nước và các phí khác", edge: "!border-l-c-elec", chip: "bg-c-elec text-white" },
       ].map(({ p, title, what, edge, chip }) =>
@@ -358,8 +367,13 @@ export default async function TenantPage({
           <section key={p.part} className={`card flex flex-col items-center gap-3 border-l-8 ${edge}`}>
             <h2 className="self-start text-lg font-bold">{title}</h2>
             <p className={`w-full rounded-xl px-3 py-2 text-center text-base font-bold ${chip}`}>
-              Mã QR này chỉ để trả {what}: {moneyD(p.remaining)}
+              Mã QR này để trả {what}: {moneyD(p.remaining)}
             </p>
+            {p.part === "all" ? (
+              <p className="w-full text-center text-sm text-muted">
+                Gồm tiền trọ {moneyD(inv.rent)} và điện, nước, phí khác {moneyD(res.othersTotal)}. Chỉ cần chuyển một lần.
+              </p>
+            ) : null}
             {p.received > 0 ? (
               <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
                 Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
@@ -395,7 +409,7 @@ export default async function TenantPage({
             <CopyTextButton text={p.content} label="Sao chép nội dung chuyển khoản" />
             <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
             <p className="text-center text-xs leading-5 text-muted">
-              Hãy giữ nguyên nội dung chuyển khoản (mỗi khoản có nội dung riêng, đừng chuyển gộp).{" "}
+              Hãy giữ nguyên nội dung chuyển khoản {p.part === "all" ? "" : "(mỗi khoản có nội dung riêng, đừng chuyển gộp)."}{" "}
               {autoConfirm
                 ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
                 : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}

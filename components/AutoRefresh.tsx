@@ -18,8 +18,8 @@ export function PaymentWatcher({
 }: {
   token: string;
   invoiceId: number;
-  /** Đợt thu đang theo dõi: tiền trọ hoặc chi phí khác. */
-  part?: "rent" | "other";
+  /** Đợt thu đang theo dõi: tiền trọ, chi phí khác, hoặc cả hai (QR gộp). */
+  part?: "rent" | "other" | "all";
   paid: boolean;
   received: number;
   seconds?: number;

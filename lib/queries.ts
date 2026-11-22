@@ -11,7 +11,7 @@ import {
   type RoomFee,
 } from "./billing";
 import { currentPeriod, rentDueISO, shiftPeriod, todayVN } from "./format";
-import { isValidPrefix, parsePaymentCode, parsePaymentTarget, type PaymentPart, type SepayPayload } from "./sepay";
+import { isValidPrefix, parsePaymentCode, parsePaymentTarget, type PayTarget, type PaymentPart, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
 
@@ -661,8 +661,8 @@ export type Payment = {
   tx_date: string;
   /** Kết quả xử lý: đã khớp hóa đơn nào, vì sao chưa khớp... */
   note: string;
-  /** Đợt thu: tiền trọ hoặc chi phí khác. */
-  part: PaymentPart;
+  /** Đợt thu: tiền trọ, chi phí khác, hoặc gộp cả hai. */
+  part: PayTarget;
 };
 
 function toPayment(r: Row): Payment {
@@ -675,7 +675,7 @@ function toPayment(r: Row): Payment {
     gateway: r.gateway,
     tx_date: r.tx_date,
     note: r.note ?? "",
-    part: r.part === "rent" ? "rent" : "other",
+    part: r.part === "rent" ? "rent" : r.part === "all" ? "all" : "other",
   };
 }
 
@@ -684,44 +684,76 @@ export async function getInvoiceById(id: number): Promise<Invoice | null> {
   return rows[0] ? toInvoice(rows[0]) : null;
 }
 
-/** Tổng số tiền đã nhận qua SePay cho từng hóa đơn, tách theo đợt thu. */
-export async function receivedByInvoice(): Promise<Map<number, Record<PaymentPart, number>>> {
+/**
+ * Chia số tiền đã nhận cho từng đợt thu. Tiền chuyển đúng mã của đợt nào thì tính cho đợt đó;
+ * tiền chuyển theo mã gộp ("all") được chia cho chi phí khác (đến hạn trước) rồi đến tiền trọ. Phần dư không tính.
+ */
+function splitReceived(inv: Invoice, sums: Record<PayTarget, number>): Record<PaymentPart, number> {
+  const res = invoiceResult(inv);
+  const needOther = Math.max(res.othersTotal - sums.other, 0);
+  const toOther = Math.min(sums.all, needOther);
+  const needRent = Math.max(res.rent - sums.rent, 0);
+  const toRent = Math.min(sums.all - toOther, needRent);
+  return { other: sums.other + toOther, rent: sums.rent + toRent };
+}
+
+async function paymentSums(invoiceIds: number[]): Promise<Map<number, Record<PayTarget, number>>> {
   const rows = await q(
-    "select invoice_id, part, sum(amount)::int as total from payments where invoice_id is not null group by invoice_id, part",
+    "select invoice_id, part, sum(amount)::int as total from payments where invoice_id = any($1) group by invoice_id, part",
+    [invoiceIds],
   );
-  const m = new Map<number, Record<PaymentPart, number>>();
+  const m = new Map<number, Record<PayTarget, number>>();
   for (const r of rows) {
-    const cur = m.get(r.invoice_id as number) ?? { rent: 0, other: 0 };
-    cur[r.part === "rent" ? "rent" : "other"] += r.total as number;
+    const cur = m.get(r.invoice_id as number) ?? { rent: 0, other: 0, all: 0 };
+    cur[r.part === "rent" ? "rent" : r.part === "all" ? "all" : "other"] += r.total as number;
     m.set(r.invoice_id as number, cur);
   }
   return m;
 }
 
-export async function receivedFor(invoiceId: number, part: PaymentPart = "other"): Promise<number> {
-  const rows = await q(
-    "select coalesce(sum(amount), 0)::int as total from payments where invoice_id = $1 and part = $2",
-    [invoiceId, part],
-  );
-  return rows[0].total;
+/** Tổng số tiền đã nhận qua SePay cho từng hóa đơn, tách theo đợt thu (đã chia phần chuyển gộp). */
+export async function receivedByInvoice(): Promise<Map<number, Record<PaymentPart, number>>> {
+  const ids = (await q("select distinct invoice_id from payments where invoice_id is not null")).map((r) => r.invoice_id as number);
+  const out = new Map<number, Record<PaymentPart, number>>();
+  if (ids.length === 0) return out;
+  const sums = await paymentSums(ids);
+  const invs = await q("select * from invoices where id = any($1)", [ids]);
+  for (const r of invs) {
+    const inv = toInvoice(r);
+    out.set(inv.id, splitReceived(inv, sums.get(inv.id) ?? { rent: 0, other: 0, all: 0 }));
+  }
+  return out;
 }
 
-/** Trạng thái thanh toán của một đợt thu đã công bố (cho trang người thuê hỏi nhanh theo thời gian thật). */
+export async function receivedFor(invoiceId: number, part: PaymentPart = "other"): Promise<number> {
+  const inv = await getInvoiceById(invoiceId);
+  if (!inv) return 0;
+  const sums = (await paymentSums([invoiceId])).get(invoiceId) ?? { rent: 0, other: 0, all: 0 };
+  return splitReceived(inv, sums)[part];
+}
+
+/**
+ * Trạng thái thanh toán của một đợt thu đã công bố (cho trang người thuê hỏi nhanh theo thời gian thật).
+ * part = "all": đã đóng khi cả hai đợt đã đóng, số đã nhận là tổng hai đợt.
+ */
 export async function paymentStatus(
   token: string,
   invoiceId: number,
-  part: PaymentPart = "other",
+  part: PayTarget = "other",
 ): Promise<{ paid: boolean; received: number } | null> {
   if (!/^[0-9a-f]{32}$/.test(token)) return null;
-  const rent = part === "rent";
   const rows = await q(
-    `select (${rent ? "i.rent_paid_at" : "i.paid_at"} is not null) as paid,
-            coalesce((select sum(amount) from payments p where p.invoice_id = i.id and p.part = $3), 0)::int as received
-     from invoices i join rooms r on r.id = i.room_id
-     where r.token = $1 and i.id = $2 and ${rent ? "i.rent_published" : "i.published"} = true`,
-    [token, invoiceId, part],
+    "select i.* from invoices i join rooms r on r.id = i.room_id where r.token = $1 and i.id = $2",
+    [token, invoiceId],
   );
-  return rows[0] ? { paid: !!rows[0].paid, received: rows[0].received } : null;
+  if (!rows[0]) return null;
+  const inv = toInvoice(rows[0]);
+  const sums = (await paymentSums([inv.id])).get(inv.id) ?? { rent: 0, other: 0, all: 0 };
+  const got = splitReceived(inv, sums);
+  if (part === "rent") return inv.rent_published ? { paid: !!inv.rent_paid_at, received: got.rent } : null;
+  if (part === "other") return inv.published ? { paid: !!inv.paid_at, received: got.other } : null;
+  if (!inv.rent_published || !inv.published) return null;
+  return { paid: !!inv.rent_paid_at && !!inv.paid_at, received: got.rent + got.other };
 }
 
 /** Giao dịch tiền vào chưa khớp hóa đơn nào (người thuê quên/ghi sai nội dung). */
@@ -757,20 +789,20 @@ export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResul
   const ref =
     parsePaymentTarget(settings.sepay_prefix, tx.content, rooms) ??
     parsePaymentTarget(settings.sepay_prefix, tx.code ?? "", rooms);
-  const part: PaymentPart = ref?.part ?? "other";
+  const part: PayTarget = ref?.part ?? "other";
   let inv: Invoice | null = ref ? await getInvoice(ref.roomId, ref.period) : null;
   let invoiceId: number | null = inv ? inv.id : null;
   if (!inv && !ref) {
     invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
     inv = invoiceId ? await getInvoiceById(invoiceId) : null;
   }
-  const partName = part === "rent" ? "tiền trọ" : "chi phí khác";
+  const partName = part === "rent" ? "tiền trọ" : part === "all" ? "gộp tiền trọ và chi phí khác" : "chi phí khác";
 
   let note = "";
   if (!inv) {
     if (ref) note = `Không có hóa đơn của ${rooms.find((r) => r.id === ref.roomId)?.name ?? "phòng"} kỳ ${ref.period}`;
     else if (invoiceId) note = `Không có hóa đơn mã ${invoiceId}`;
-    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TIENTRO_MM/YYYY) trong nội dung`;
+    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TIENTRO_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TONG_MM/YYYY) trong nội dung`;
   }
 
   const rows = await q(
@@ -781,7 +813,19 @@ export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResul
   if (rows.length === 0) return "duplicate";
   if (!inv) return "unmatched";
 
-  const result = await settleInvoice(inv, part, /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN());
+  const payDate = /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN();
+  if (part === "all") {
+    // Chuyển gộp: chia tiền cho chi phí khác trước rồi đến tiền trọ, đợt nào đủ thì tự đánh dấu đã thu.
+    const o = await settleInvoice(inv, "other", payDate);
+    const r = await settleInvoice(inv, "rent", payDate);
+    const paidParts = [o.state === "paid" ? "chi phí khác" : "", r.state === "paid" ? "tiền trọ" : ""].filter(Boolean);
+    const allNote = paidParts.length
+      ? `Khớp hóa đơn #${inv.id} (${partName}), đã đủ tiền: ${paidParts.join(" và ")}, tự đánh dấu đã thu`
+      : `Khớp hóa đơn #${inv.id} (${partName}), mới nhận ${(o.received + r.received).toLocaleString("vi-VN")}đ / ${(o.total + r.total).toLocaleString("vi-VN")}đ, còn thiếu`;
+    await q("update payments set note = $2 where sepay_id = $1", [tx.id, allNote]);
+    return paidParts.length ? "paid" : "recorded";
+  }
+  const result = await settleInvoice(inv, part, payDate);
   let finalNote = result.state === "paid" ? `Khớp hóa đơn #${inv.id} (${partName}), đã đủ tiền và tự đánh dấu đã thu` : "";
   if (result.state === "recorded") {
     finalNote = !result.published
