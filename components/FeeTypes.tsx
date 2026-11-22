@@ -19,23 +19,23 @@ export function FeeTypes({
   period?: string;
 }) {
   return (
-    <section className="card">
-      <form action={createFeeTypeAction} className="grid grid-cols-2 gap-3">
+    <details className="card group">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold [&::-webkit-details-marker]:hidden">
+        <span
+          aria-hidden
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xl leading-none text-accent transition-transform group-open:rotate-45"
+        >
+          +
+        </span>
+        Thêm khoản phí mới
+      </summary>
+      <form action={createFeeTypeAction} className="mt-3 grid grid-cols-2 gap-3">
         <input type="hidden" name="room" value={roomId} />
         <input type="hidden" name="back" value={back} />
         {period ? <input type="hidden" name="period" value={period} /> : null}
-        <div className="col-span-2">
-          <h2 className="text-base font-bold">
-            <span aria-hidden className="mr-2">
-              🧾
-            </span>
-            Thêm khoản phí mới
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Khoản phí mới chỉ bật cho phòng này. Phí bằng 0 không hiện trên hóa
-            đơn.
-          </p>
-        </div>
+        <p className="col-span-2 text-sm text-muted">
+          Khoản phí mới chỉ bật cho phòng này. Phí bằng 0 không hiện trên hóa đơn.
+        </p>
         <label className="col-span-2 block">
           <span className="label">Tên loại phí</span>
           <input name="name" placeholder="Gửi xe" className="input" />
@@ -70,6 +70,6 @@ export function FeeTypes({
           Thêm loại phí
         </button>
       </form>
-    </section>
+    </details>
   );
 }

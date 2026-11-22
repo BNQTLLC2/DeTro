@@ -206,7 +206,7 @@ export default async function TenantPage({
       ) : null}
       {otherShown ? (
         <CollectCard
-          title={`Điện, nước và các phí khác ${periodName(inv.period)}`}
+          title={`Điện, nước và các phí khác (nếu có) ${periodName(inv.period)}`}
           amount={res.othersTotal}
           paid={otherPaid}
           paidAt={inv.paid_at}
