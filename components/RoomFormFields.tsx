@@ -73,8 +73,8 @@ export function RoomFormFields({
           <span className="whitespace-nowrap text-2xl font-extrabold">{roomName}</span>
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-extrabold">Phòng {roomName}</h1>
-          <p className="truncate text-base text-muted">
+          <h1 className="break-words text-xl font-extrabold">Phòng {roomName}</h1>
+          <p className="break-words text-base text-muted">
             {vacant ? "Đang trống" : r.tenant_name || "Chưa nhập người thuê"}
           </p>
         </div>

@@ -40,7 +40,7 @@ export default async function RoomsPage() {
                 </span>
                 <span className="h-px flex-1 bg-line" />
               </div>
-              <ul className="grid grid-cols-3 gap-2 sm:gap-3">
+              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
                 {f.rooms.map((r) => (
                   <li key={r.id}>
                     <Link
@@ -50,7 +50,7 @@ export default async function RoomsPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xl font-bold">{r.name}</span>
+                        <span className="text-lg font-bold leading-tight">{`Phòng ${r.name.trim().replace(/^Phòng\s*/i, "")}`}</span>
                         <span
                           className={`size-2.5 shrink-0 rounded-full ${r.is_vacant ? "bg-warn" : "bg-ok"}`}
                           aria-label={r.is_vacant ? "Trống" : "Đang thuê"}
@@ -60,10 +60,10 @@ export default async function RoomsPage() {
                         <p className="text-sm font-medium text-warn">Trống</p>
                       ) : (
                         <>
-                          <p className={`truncate text-sm font-medium ${r.tenant_name ? "" : "text-muted"}`}>
+                          <p className={`break-words text-sm font-medium ${r.tenant_name ? "" : "text-muted"}`}>
                             {r.tenant_name || "Chưa có tên"}
                           </p>
-                          <p className="truncate text-xs text-muted">
+                          <p className="break-words text-xs text-muted">
                             {r.rent > 0 ? moneyD(r.rent) : "Chưa có giá"}
                             {" · "}
                             {r.occupants} người
