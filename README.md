@@ -24,6 +24,7 @@ Các bảng database và dữ liệu khởi tạo (9 phòng trống, phí rác v
 
 ## Chạy thử trên máy
 
+
 ```bash
 npm install
 cp .env.example .env.local   # đặt ADMIN_PASSWORD (có thể để trống DATABASE_URL)
