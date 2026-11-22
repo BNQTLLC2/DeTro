@@ -122,7 +122,7 @@ export default async function EnterReadings({
 
       <nav
         aria-label="Chọn phòng"
-        className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1"
+        className="-mx-4 mb-4 no-scrollbar flex gap-2 overflow-x-auto px-4 pb-1"
       >
         {rooms.map((r) => {
           const i = byRoom.get(r.id);
@@ -157,14 +157,6 @@ export default async function EnterReadings({
           );
         })}
       </nav>
-      <p className="-mt-2 mb-4 flex items-center gap-3 text-xs text-muted">
-        <span className="flex items-center gap-1">
-          <Dot on color="bg-c-elec" /> điện đã nhập
-        </span>
-        <span className="flex items-center gap-1">
-          <Dot on color="bg-c-water" /> nước đã nhập
-        </span>
-      </p>
 
       <section className="mb-3">
         <h2 className="text-xl font-bold">{selected.name}</h2>
