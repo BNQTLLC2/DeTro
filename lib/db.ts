@@ -107,6 +107,8 @@ const SCHEMA: string[] = [
   // Hai đợt thu: tiền trọ (rent_*) và chi phí khác (published / paid_at như trước).
   `alter table invoices add column if not exists rent_paid_at text`,
   `alter table invoices add column if not exists rent_published boolean not null default false`,
+  // Đã tự công bố hoặc chủ trọ đã tự công bố/hủy công bố tiền trọ: không tự công bố lại.
+  `alter table invoices add column if not exists rent_auto_done boolean not null default false`,
   `alter table payments add column if not exists part text not null default 'other'`,
   `create table if not exists login_attempts (
     ip text not null,

@@ -79,8 +79,8 @@ export default async function SettingsPage({
         </section>
 
         <p className="text-xs text-muted">
-          Đổi giá sẽ áp dụng ngay cho hóa đơn tháng hiện tại chưa công bố. Hóa
-          đơn đã công bố giữ nguyên giá cũ.
+          Đổi giá sẽ áp dụng ngay cho hóa đơn tháng hiện tại chưa thu tiền. Hóa
+          đơn tháng cũ và hóa đơn đã thu tiền giữ nguyên giá cũ.
         </p>
         <button type="submit" className="btn-primary">
           Lưu cài đặt

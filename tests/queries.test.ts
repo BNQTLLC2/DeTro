@@ -1,5 +1,5 @@
 // Chạy toàn bộ luồng với Postgres thật (PGlite chạy trong bộ nhớ).
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.PGLITE_DIR = ""; // trong bộ nhớ
 delete process.env.DATABASE_URL;
@@ -105,33 +105,79 @@ describe("luồng chủ trọ -> người thuê", () => {
     expect(inv.adjustments).toEqual([{ name: "Giảm trừ", amount: -20000 }]);
   });
 
-  it("đổi giá áp dụng ngay cho hóa đơn kỳ chỉ định chưa công bố, bỏ qua hóa đơn đã công bố và kỳ khác", async () => {
+  it("đổi giá áp dụng ngay cho hóa đơn kỳ chỉ định chưa thu tiền (kể cả đã công bố), bỏ qua hóa đơn đã thu và kỳ khác", async () => {
     const rooms = await Qm.listRooms();
-    const [a, b] = rooms.slice(-2);
+    const [a, b, c] = rooms.slice(-3);
     const period = "2026-08";
     const before = await Qm.getSettings();
 
     await Qm.saveReading(a.id, period, "elec", 0, 100);
     await Qm.saveReading(a.id, period, "water", 0, 5);
+    await Qm.publishInvoice(a.id, period);
+    await Qm.setPaid(a.id, period, true); // a đã thu tiền
     await Qm.saveReading(b.id, period, "elec", 0, 100);
-    await Qm.saveReading(b.id, "2026-07", "elec", 0, 50); // kỳ khác
-    await Qm.publishInvoice(a.id, period); // chốt giá cũ
+    await Qm.saveReading(b.id, period, "water", 0, 5);
+    await Qm.publishInvoice(b.id, period); // b đã công bố nhưng chưa thu
+    await Qm.saveReading(c.id, period, "elec", 0, 100); // c chưa công bố
+    await Qm.saveReading(c.id, "2026-07", "elec", 0, 50); // kỳ khác
 
     await Qm.saveSettings({ elec_price: 4200, water_quota: 5, water_low: 8000, water_high: 20000 });
-    expect(await Qm.applyPricesToPeriod(period)).toBe(1); // chỉ hóa đơn của b
+    expect(await Qm.applyPricesToPeriod(period)).toBe(2); // b và c
 
-    const ia = (await Qm.getInvoice(a.id, period))!;
-    expect(ia.elec_price).toBe(before.elec_price); // đã công bố -> giữ giá cũ
-    const ib = (await Qm.getInvoice(b.id, period))!;
-    expect([ib.elec_price, ib.water_quota, ib.water_low, ib.water_high]).toEqual([4200, 5, 8000, 20000]);
-    const other = (await Qm.getInvoice(b.id, "2026-07"))!;
-    expect(other.elec_price).toBe(before.elec_price); // kỳ khác không bị đụng
+    expect((await Qm.getInvoice(a.id, period))!.elec_price).toBe(before.elec_price); // đã thu -> giữ giá cũ
+    for (const r of [b, c]) {
+      const i = (await Qm.getInvoice(r.id, period))!;
+      expect([i.elec_price, i.water_quota, i.water_low, i.water_high]).toEqual([4200, 5, 8000, 20000]);
+    }
+    expect((await Qm.getInvoice(c.id, "2026-07"))!.elec_price).toBe(before.elec_price); // kỳ khác không bị đụng
 
     await Qm.saveSettings({
       elec_price: before.elec_price,
       water_quota: before.water_quota,
       water_low: before.water_low,
       water_high: before.water_high,
+    });
+  });
+
+  describe("tự công bố tiền trọ đúng ngày", () => {
+    afterEach(() => vi.useRealTimers());
+    const at = (iso: string) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${iso}T05:00:00+07:00`));
+    };
+
+    it("công bố khi đến ngày vào ở, bỏ qua tháng đầu mới vào ở, không công bố lại khi chủ trọ đã hủy", async () => {
+      const rooms = await Qm.listRooms();
+      const [old, fresh, noRent] = rooms.slice(5, 8);
+      await Qm.saveRoom(old.id, { ...old, rent: 1000000, move_in_date: "2026-03-15", billing_day: 20, is_vacant: false });
+      await Qm.saveRoom(fresh.id, { ...fresh, rent: 1000000, move_in_date: "2026-11-15", billing_day: 20, is_vacant: false });
+      await Qm.saveRoom(noRent.id, { ...noRent, rent: 0, move_in_date: "2026-03-15", billing_day: 20, is_vacant: false });
+
+      // 14/12: chưa tới ngày thu của tháng 12 (15/12), nhưng kỳ tháng 11 (thu 15/11) đã tới hạn
+      at("2026-12-14");
+      await Qm.autoPublishRent(); // (các phòng khác của bài test trước cũng có thể được công bố)
+      expect((await Qm.getInvoice(old.id, "2026-11"))!.rent_published).toBe(true);
+      expect(await Qm.getInvoice(old.id, "2026-12")).toBeNull();
+      expect(await Qm.getInvoice(fresh.id, "2026-11")).toBeNull(); // tháng vào ở chưa thu
+      expect(await Qm.getInvoice(noRent.id, "2026-11")).toBeNull(); // không có tiền trọ
+
+      // Gọi lại không công bố thêm
+      expect(await Qm.autoPublishRent()).toBe(0);
+
+      // 15/12: đến ngày thu tháng 12 -> tự công bố, cả phòng mới vào ở (kỳ 15/11–14/12 xong)
+      at("2026-12-15");
+      await Qm.autoPublishRent();
+      const dec = (await Qm.getInvoice(old.id, "2026-12"))!;
+      expect(dec.rent_published).toBe(true);
+      expect(dec.rent).toBe(1000000);
+      expect((await Qm.getInvoice(fresh.id, "2026-12"))!.rent_published).toBe(true);
+
+      // Chủ trọ hủy công bố thì không tự công bố lại
+      await Qm.unpublishRent(old.id, "2026-12");
+      expect(await Qm.autoPublishRent()).toBe(0);
+      expect((await Qm.getInvoice(old.id, "2026-12"))!.rent_published).toBe(false);
+      // Có thể chỉ chạy cho một phòng (trang người thuê)
+      expect(await Qm.autoPublishRent(old.id)).toBe(0);
     });
   });
 

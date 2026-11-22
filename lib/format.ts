@@ -84,6 +84,12 @@ export function rentDueDate(period: string, moveInDate: string, billingDay: numb
   return dmy(clampDay(y, m, rentDay(moveInDate, billingDay)));
 }
 
+/** Như rentDueDate nhưng dạng YYYY-MM-DD (để so với todayVN). */
+export function rentDueISO(period: string, moveInDate: string, billingDay: number): string {
+  const [y, m] = period.split("-").map(Number);
+  return clampDay(y, m, rentDay(moveInDate, billingDay)).toISOString().slice(0, 10);
+}
+
 /** Kỳ thuê của tiền trọ: từ ngày vào ở tháng trước đến hết ngày liền trước ngày vào ở tháng này. */
 export function rentRange(period: string, moveInDate: string, billingDay: number): string {
   const day = rentDay(moveInDate, billingDay);

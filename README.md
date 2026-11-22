@@ -64,10 +64,11 @@ Hãy lưu đường dẫn này vào bookmark. Quên thì xem lại biến `ADMIN
 - **Hai đợt thu riêng**:
   - *Tiền trọ* thu vào ngày vào ở của từng phòng (thu sau: tiền trọ kỳ 15/10 – 14/11 thu ngày 15/11). Công bố riêng, không cần số điện nước. Mã chuyển khoản dạng `TIỀNTỐ_PHÒNG_TIENTRO_MM/YYYY`.
   - *Chi phí khác* (điện, nước, phí, phát sinh) thu một ngày cố định hằng tháng, đặt ở Cài đặt (mặc định ngày 6; là ngày thu đầu tiên sau ngày chốt số). Mã chuyển khoản dạng `TIỀNTỐ_PHÒNG_MM/YYYY`.
+  - Tiền trọ tự công bố đúng ngày thu (khi có người mở trang Tổng quan hoặc trang người thuê, và mỗi sáng nhờ Vercel Cron). Muốn bật Cron: thêm biến môi trường `CRON_SECRET` (chuỗi bất kỳ) trên Vercel rồi Redeploy. Chủ trọ vẫn công bố sớm hoặc hủy công bố tay được, hệ thống không tự công bố lại phần đã hủy.
   - Mỗi đợt tự khớp SePay, đánh dấu đã thu và hiển thị QR riêng.
 - **Phí khác** (rác, wifi, gửi xe...): thêm/bớt trong Cài đặt; mỗi phòng bật/tắt và đặt mức riêng ở mục Phòng. Phí bằng 0 không hiện.
 - **Khoản phát sinh** theo tháng, cho phép số âm để giảm trừ.
-- Số đầu kỳ tự lấy từ số cuối kỳ trước. Hóa đơn lưu bản chụp giá: lưu Cài đặt sẽ áp giá mới ngay cho hóa đơn tháng hiện tại chưa công bố, còn hóa đơn đã công bố giữ nguyên giá cũ.
+- Số đầu kỳ tự lấy từ số cuối kỳ trước. Hóa đơn lưu bản chụp giá: lưu Cài đặt sẽ áp giá mới ngay cho hóa đơn tháng hiện tại chưa thu tiền, còn hóa đơn tháng cũ và hóa đơn đã thu giữ nguyên giá cũ.
 - Sửa số hoặc khoản phát sinh của hóa đơn đã công bố thì hóa đơn tự về "chưa công bố" để bạn kiểm tra rồi công bố lại.
 
 ## Bảo mật

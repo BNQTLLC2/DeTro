@@ -242,12 +242,12 @@ export async function saveSettingsAction(fd: FormData) {
       water_high: Math.max(intOf(fd, "water_high"), 0),
       fee_day: feeDay,
     });
-    // Giá mới áp dụng luôn cho hóa đơn tháng hiện tại (chưa công bố).
+    // Giá mới áp dụng luôn cho hóa đơn tháng hiện tại chưa thu tiền.
     const period = currentPeriod();
     const n = await Q.applyPricesToPeriod(period);
     return n > 0
-      ? `Đã lưu cài đặt và áp dụng giá mới cho ${n} hóa đơn ${periodName(period)}. Hóa đơn đã công bố giữ nguyên giá cũ.`
-      : "Đã lưu cài đặt. Hóa đơn đã công bố giữ nguyên giá cũ.";
+      ? `Đã lưu cài đặt và áp dụng giá mới cho ${n} hóa đơn ${periodName(period)}. Hóa đơn tháng cũ và hóa đơn đã thu giữ nguyên giá cũ.`
+      : "Đã lưu cài đặt. Hóa đơn tháng cũ và hóa đơn đã thu giữ nguyên giá cũ.";
   });
 }
 

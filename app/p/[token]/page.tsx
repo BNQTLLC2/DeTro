@@ -23,6 +23,7 @@ import {
   getRoomByToken,
   getSettings,
   invoiceResult,
+  autoPublishRent,
   listVisibleInvoices,
   receivedFor,
   type Invoice,
@@ -49,6 +50,7 @@ export default async function TenantPage({
   const room = await getRoomByToken(token);
   if (!room) notFound();
 
+  await autoPublishRent(room.id); // đến ngày thu thì tự công bố tiền trọ
   const [settings, invoices] = await Promise.all([getSettings(), listVisibleInvoices(room.id)]);
 
   const header = (

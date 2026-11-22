@@ -12,6 +12,7 @@ import {
 } from "@/lib/format";
 import { first, type SP } from "@/lib/params";
 import {
+  autoPublishRent,
   getSettings,
   invoiceResult,
   listInvoices,
@@ -108,6 +109,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   const period = isPeriod(m) ? m : currentPeriod();
   const back = `/admin?m=${period}`;
 
+  await autoPublishRent(); // đến ngày thu thì tự công bố tiền trọ
   const [rooms, invoices, settings, received, recent] = await Promise.all([
     listRooms(),
     listInvoices(period),

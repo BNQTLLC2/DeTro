@@ -10,7 +10,7 @@ import {
   type FeeType,
   type RoomFee,
 } from "./billing";
-import { todayVN } from "./format";
+import { currentPeriod, rentDueISO, shiftPeriod, todayVN } from "./format";
 import { isValidPrefix, parsePaymentCode, parsePaymentTarget, type PaymentPart, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
@@ -76,6 +76,7 @@ export type Invoice = {
   paid_at: string | null;
   /** Tiền trọ được công bố riêng, không cần số điện nước. */
   rent_published: boolean;
+  rent_auto_done: boolean;
   rent_paid_at: string | null;
 };
 
@@ -131,6 +132,7 @@ function toInvoice(r: Row): Invoice {
     published_at: r.published_at ? new Date(r.published_at).toISOString() : null,
     paid_at: r.paid_at,
     rent_published: !!r.rent_published,
+    rent_auto_done: !!r.rent_auto_done,
     rent_paid_at: r.rent_paid_at ?? null,
   };
 }
@@ -190,14 +192,14 @@ export async function saveSettings(p: Partial<Record<Exclude<keyof Settings, "se
 }
 
 /**
- * Áp giá điện/nước hiện hành (cài đặt) cho hóa đơn của kỳ `period` chưa từng công bố.
- * Hóa đơn đã công bố giữ nguyên giá đã chốt. Trả về số hóa đơn được cập nhật.
+ * Áp giá điện/nước hiện hành (cài đặt) cho hóa đơn của kỳ `period` chưa thu tiền (kể cả đã công bố).
+ * Hóa đơn đã thu tiền giữ nguyên giá đã chốt. Trả về số hóa đơn được cập nhật.
  */
 export async function applyPricesToPeriod(period: string): Promise<number> {
   const s = await getSettings();
   const rows = await q(
     `update invoices set elec_price=$2, water_quota=$3, water_low=$4, water_high=$5
-     where period=$1 and published_at is null returning id`,
+     where period=$1 and paid_at is null returning id`,
     [period, s.elec_price, s.water_quota, s.water_low, s.water_high],
   );
   return rows.length;
@@ -557,13 +559,46 @@ export async function publishRent(roomId: number, period: string): Promise<void>
   const inv = await ensureInvoice(room, period);
   // Chưa công bố gì thì lấy tiền trọ hiện tại của phòng; đã công bố thì giữ mức đã chốt.
   if (!inv.published_at && !inv.rent_published) await q("update invoices set rent=$2 where id=$1", [inv.id, room.rent]);
-  await q("update invoices set rent_published = true where id = $1", [inv.id]);
+  await q("update invoices set rent_published = true, rent_auto_done = true where id = $1", [inv.id]);
   const fresh = await getInvoiceById(inv.id);
   if (fresh) await settleInvoice(fresh, "rent", todayVN());
 }
 
+/**
+ * Tự công bố tiền trọ đúng ngày thu (ngày vào ở hằng tháng) cho kỳ này và kỳ trước (phòng nào chưa được công bố).
+ * Phòng trống, chưa có tiền trọ, hoặc tháng đầu mới vào ở (chưa đủ một kỳ thuê) thì bỏ qua.
+ * Chủ trọ đã tự công bố hoặc hủy công bố thì không tự công bố lại. Trả về số phòng đã công bố.
+ * Gọi khi mở trang (không cần tác vụ định kỳ) và từ /api/cron/rent mỗi sáng.
+ */
+export async function autoPublishRent(roomId?: number): Promise<number> {
+  const today = todayVN();
+  const cur = currentPeriod();
+  const periods = [shiftPeriod(cur, -1), cur];
+  const rooms = (await listRooms()).filter(
+    (r) => !r.is_vacant && r.rent > 0 && (roomId === undefined || r.id === roomId),
+  );
+  if (rooms.length === 0) return 0;
+  const done = await q(
+    "select room_id, period from invoices where period = any($1) and (rent_published = true or rent_auto_done = true)",
+    [periods],
+  );
+  const skip = new Set(done.map((r) => `${r.room_id}|${r.period}`));
+  let n = 0;
+  for (const room of rooms) {
+    for (const period of periods) {
+      if (skip.has(`${room.id}|${period}`)) continue;
+      // Kỳ thuê đầu tiên kết thúc vào ngày vào ở của tháng sau, nên chưa thu trong tháng vào ở.
+      if (room.move_in_date && room.move_in_date.slice(0, 7) >= period) continue;
+      if (rentDueISO(period, room.move_in_date, room.billing_day) > today) continue;
+      await publishRent(room.id, period);
+      n++;
+    }
+  }
+  return n;
+}
+
 export async function unpublishRent(roomId: number, period: string): Promise<void> {
-  await q("update invoices set rent_published = false where room_id = $1 and period = $2", [roomId, period]);
+  await q("update invoices set rent_published = false, rent_auto_done = true where room_id = $1 and period = $2", [roomId, period]);
 }
 
 /** Công bố tất cả phòng đã nhập đủ điện và nước nhưng chưa công bố. Trả về số phòng đã công bố. */
