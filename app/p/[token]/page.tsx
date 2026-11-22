@@ -341,19 +341,35 @@ export default async function TenantPage({
                 : ""
             }
           />
-          <div className="flex flex-col gap-1.5 rounded-xl bg-c-water-soft p-3.5">
-            <p className="text-sm">
-              Mỗi người có định mức {n1(inv.water_quota)} khối nước. Phòng bạn có {inv.occupants} người nên định mức là{" "}
-              {n1(res.quota)} khối.
-            </p>
-            <p className="font-semibold">
-              Trong định mức: {n1(res.lowM3)} khối × {moneyD(inv.water_low)} = {moneyD(res.lowAmount)}
-            </p>
-            <p className="font-semibold">
-              Vượt định mức: {n1(res.highM3)} khối × {moneyD(inv.water_high)} = {moneyD(res.highAmount)}
-            </p>
-            <p className="text-sm">Cộng lại: {moneyD(res.waterAmount)}</p>
-          </div>
+          <dl className="flex flex-col gap-2.5 rounded-xl bg-c-water-soft p-3.5">
+            <div className="text-sm">
+              Định mức: {inv.occupants} người × {n1(inv.water_quota)} = <b>{n1(res.quota)} khối</b>
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t border-black/10 pt-2.5">
+              <div>
+                <dt className="font-semibold">Trong định mức</dt>
+                <dd className="text-sm text-muted">
+                  {n1(res.lowM3)} khối × {moneyD(inv.water_low)}
+                </dd>
+              </div>
+              <dd className="shrink-0 whitespace-nowrap font-semibold">{moneyD(res.lowAmount)}</dd>
+            </div>
+            {res.highM3 > 0 ? (
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <dt className="font-semibold">Vượt định mức</dt>
+                  <dd className="text-sm text-muted">
+                    {n1(res.highM3)} khối × {moneyD(inv.water_high)}
+                  </dd>
+                </div>
+                <dd className="shrink-0 whitespace-nowrap font-semibold">{moneyD(res.highAmount)}</dd>
+              </div>
+            ) : null}
+            <div className="flex items-baseline justify-between gap-3 border-t border-black/10 pt-2.5">
+              <dt className="text-sm">Thành tiền</dt>
+              <dd className="text-lg font-bold">{moneyD(res.waterAmount)}</dd>
+            </div>
+          </dl>
         </section>
       ) : null}
 
