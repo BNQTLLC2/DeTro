@@ -42,7 +42,7 @@ export default async function RoomsPage() {
               </div>
               <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:gap-3">
                 {f.rooms.map((r) => (
-                  <li key={r.id} className="min-w-[7.25rem] flex-1 snap-start">
+                  <li key={r.id} className="w-[7.25rem] shrink-0 snap-start sm:w-[11rem]">
                     <Link
                       href={`/admin/phong/${r.id}`}
                       className={`card flex h-full flex-col gap-1 border-l-4 !p-3 no-underline transition-colors hover:border-accent ${

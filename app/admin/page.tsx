@@ -303,9 +303,15 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:gap-3">
+                <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:gap-3">
                   {f.rows.map((r) => (
-                    <li key={r.room.id} className="min-w-[7.25rem] flex-1 snap-start">
+                    <li key={r.room.id} className="relative w-[7.25rem] shrink-0 snap-start sm:w-[11rem]">
+                      {r.room.id === selected ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -bottom-2 left-1/2 z-10 -translate-x-1/2 border-x-[9px] border-t-[9px] border-x-transparent border-t-accent"
+                        />
+                      ) : null}
                       <RoomTile
                         row={r}
                         got={r.inv ? (received.get(r.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
@@ -318,7 +324,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   ))}
                 </ul>
                 {open ? (
-                  <ul className="card overflow-hidden !p-0">
+                  <ul className="card -mt-2 overflow-hidden !border-2 !border-accent !p-0">
                     <RoomItem
                       row={open}
                       period={period}
@@ -467,7 +473,7 @@ function RoomTile({
 
   if (status === "vacant") {
     return (
-      <div className="flex h-full min-h-[6.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
+      <div className="flex h-full min-h-[12.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
         <span className="block text-xs leading-none">Phòng</span>
         <span className="block text-2xl font-bold leading-tight">{num(room.name)}</span>
         <span className="text-sm">Trống</span>
@@ -500,8 +506,8 @@ function RoomTile({
       href={href}
       scroll={false}
       aria-current={selected ? "true" : undefined}
-      className={`flex h-full flex-col overflow-hidden rounded-2xl border bg-surface no-underline transition-colors ${
-        selected ? "border-2 border-accent" : "border-line hover:border-accent"
+      className={`flex h-full min-h-[12.5rem] flex-col overflow-hidden rounded-2xl border no-underline transition-colors ${
+        selected ? "border-2 border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent"
       }`}
     >
       <div className="px-2.5 pt-3 pb-2 sm:px-3">
