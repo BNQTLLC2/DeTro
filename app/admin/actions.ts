@@ -151,17 +151,18 @@ export async function saveRoomAction(fd: FormData): Promise<ActionState> {
   return run("Đã lưu thông tin phòng.", async () => {
     const name = str(fd, "name");
     if (!name) throw new Error("Tên phòng không được để trống.");
-    const billingDay = intOf(fd, "billing_day", 1);
-    if (billingDay < 1 || billingDay > 31) throw new Error("Ngày chốt số phải từ 1 đến 31.");
+    // Tiền cọc & ngày chốt số không còn nhập trên form: giữ nguyên giá trị hiện có.
+    const current = await Q.getRoom(id);
+    if (!current) throw new Error("Không tìm thấy phòng.");
     await Q.saveRoom(id, {
       name,
       rent: Math.max(intOf(fd, "rent"), 0),
       tenant_name: str(fd, "tenant_name"),
       tenant_phone: str(fd, "tenant_phone"),
       occupants: Math.max(intOf(fd, "occupants", 1), 0),
-      deposit: Math.max(intOf(fd, "deposit"), 0),
+      deposit: current.deposit,
       move_in_date: str(fd, "move_in_date"),
-      billing_day: billingDay,
+      billing_day: current.billing_day,
       is_vacant: fd.get("is_vacant") === "on",
       init_elec: Math.max(intOf(fd, "init_elec"), 0),
       init_water: Math.max(intOf(fd, "init_water"), 0),
