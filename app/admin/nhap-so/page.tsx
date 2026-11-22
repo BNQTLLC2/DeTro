@@ -329,17 +329,9 @@ export default async function EnterReadings({
               : "Cần lưu đủ số điện và số nước mới công bố được."}
         </p>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {published ? (
             <>
-              <form action={unpublishRoomAction}>
-                <input type="hidden" name="room" value={selected.id} />
-                <input type="hidden" name="period" value={period} />
-                <input type="hidden" name="back" value={back} />
-                <button type="submit" className="btn-ghost">
-                  Hủy công bố
-                </button>
-              </form>
               <form action={setPaidAction}>
                 <input type="hidden" name="room" value={selected.id} />
                 <input type="hidden" name="period" value={period} />
@@ -351,35 +343,42 @@ export default async function EnterReadings({
                 />
                 <button
                   type="submit"
-                  className={inv?.paid_at ? "btn-ghost" : "btn-primary"}
+                  className={`w-full ${inv?.paid_at ? "btn-ghost" : "btn-primary"}`}
                 >
                   {inv?.paid_at ? "Bỏ đánh dấu đã thu" : "Đánh dấu đã thu"}
                 </button>
               </form>
+              <SendLink
+                compact
+                fill
+                path={`/p/${selected.token}`}
+                phone={selected.tenant_phone.replace(/\D/g, "")}
+                message={`Chào ${selected.tenant_name || "bạn"}, hóa đơn ${selected.name} tháng ${periodLabel(period)} là ${moneyD(res.total)}. Xem chi tiết tại: {link}`}
+              />
+              <form action={unpublishRoomAction} className="col-span-2">
+                <input type="hidden" name="room" value={selected.id} />
+                <input type="hidden" name="period" value={period} />
+                <input type="hidden" name="back" value={back} />
+                <button type="submit" className="btn-ghost w-full">
+                  Hủy công bố
+                </button>
+              </form>
             </>
           ) : (
-            <form action={publishRoomAction}>
+            <form action={publishRoomAction} className="col-span-2">
               <input type="hidden" name="room" value={selected.id} />
               <input type="hidden" name="period" value={period} />
               <input type="hidden" name="back" value={back} />
               <button
                 type="submit"
                 disabled={!res.complete}
-                className="btn-primary"
+                className="btn-primary w-full"
               >
                 Công bố cho người thuê
               </button>
             </form>
           )}
         </div>
-
-        {published ? (
-          <SendLink
-            path={`/p/${selected.token}`}
-            phone={selected.tenant_phone.replace(/\D/g, "")}
-            message={`Chào ${selected.tenant_name || "bạn"}, hóa đơn ${selected.name} tháng ${periodLabel(period)} là ${moneyD(res.total)}. Xem chi tiết tại: {link}`}
-          />
-        ) : null}
       </section>
     </main>
   );

@@ -12,12 +12,15 @@ export function SendLink({
   phone,
   message,
   compact = false,
+  fill = false,
 }: {
   path: string;
   phone: string;
   message: string; // chứa {link} để thay bằng link thật
   /** Nút phụ nhỏ nằm cạnh nút chính (dùng trong hàng flex-wrap). */
   compact?: boolean;
+  /** Với compact: nút giãn đầy ô (dùng trong lưới), ghi chú chiếm cả hàng. */
+  fill?: boolean;
 }) {
   const [note, setNote] = useState("");
 
@@ -40,16 +43,20 @@ export function SendLink({
     return (
       <>
         {phone ? (
-          <button type="button" onClick={zalo} className="btn-ghost shrink-0">
+          <button
+            type="button"
+            onClick={zalo}
+            className={`btn-ghost shrink-0 ${fill ? "w-full" : ""}`}
+          >
             Gửi Zalo
           </button>
         ) : null}
         {!phone ? (
-          <p className="w-full basis-full text-sm text-muted">
+          <p className="col-span-2 w-full basis-full text-sm text-muted">
             Chưa có số điện thoại, thêm ở mục Phòng để gửi link.
           </p>
         ) : note ? (
-          <p className="w-full basis-full text-sm text-muted">{note}</p>
+          <p className="col-span-2 w-full basis-full text-sm text-muted">{note}</p>
         ) : null}
       </>
     );
