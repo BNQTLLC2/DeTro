@@ -157,6 +157,14 @@ export default async function EnterReadings({
           );
         })}
       </nav>
+      <p className="-mt-2 mb-4 flex items-center gap-3 text-xs text-muted">
+        <span className="flex items-center gap-1">
+          <Dot on color="bg-c-elec" /> điện đã nhập
+        </span>
+        <span className="flex items-center gap-1">
+          <Dot on color="bg-c-water" /> nước đã nhập
+        </span>
+      </p>
 
       <section className="mb-3">
         <h2 className="text-xl font-bold">{selected.name}</h2>
@@ -165,13 +173,6 @@ export default async function EnterReadings({
           {selected.occupants} người · chốt số ngày {selected.billing_day}
         </p>
       </section>
-
-      {published ? (
-        <p className="mb-3 rounded-xl bg-ok-bg p-3 text-sm text-ok">
-          Hóa đơn này đã công bố. Nếu bạn sửa số hoặc khoản phát sinh, hóa đơn
-          tự chuyển về &quot;chưa công bố&quot; để bạn kiểm tra rồi công bố lại.
-        </p>
-      ) : null}
 
       <section className="card mb-3 flex flex-col gap-3 border-l-4 !border-l-c-elec">
         <MeterHead
