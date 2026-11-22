@@ -40,9 +40,9 @@ export default async function RoomsPage() {
                 </span>
                 <span className="h-px flex-1 bg-line" />
               </div>
-              <ul className="grid grid-cols-3 gap-2 sm:gap-3">
+              <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:gap-3">
                 {f.rooms.map((r) => (
-                  <li key={r.id}>
+                  <li key={r.id} className="min-w-[7.25rem] flex-1 snap-start">
                     <Link
                       href={`/admin/phong/${r.id}`}
                       className={`card flex h-full flex-col gap-1 border-l-4 !p-3 no-underline transition-colors hover:border-accent ${

@@ -303,9 +303,9 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="grid grid-cols-3 items-stretch gap-2 sm:gap-3">
+                <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:gap-3">
                   {f.rows.map((r) => (
-                    <li key={r.room.id}>
+                    <li key={r.room.id} className="min-w-[7.25rem] flex-1 snap-start">
                       <RoomTile
                         row={r}
                         got={r.inv ? (received.get(r.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
