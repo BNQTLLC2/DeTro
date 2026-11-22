@@ -276,14 +276,20 @@ export default async function TenantPage({
             from={inv.elec_start}
             to={inv.elec_end}
           />
-          <div className="flex flex-col gap-1.5 rounded-xl bg-c-elec-soft p-3.5">
-            <p className="text-sm">Số mới trừ số cũ = số điện đã dùng</p>
-            <p className="text-lg font-bold">{n1(res.kwh)} số điện</p>
-            <p className="text-sm">Mỗi 1 số điện (1 kWh) giá {moneyD(inv.elec_price)}</p>
-            <p className="font-semibold">
-              {n1(res.kwh)} × {moneyD(inv.elec_price)} = {moneyD(res.elecAmount)}
-            </p>
-          </div>
+          <dl className="flex flex-col gap-2 rounded-xl bg-c-elec-soft p-3.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm">Số điện đã dùng</dt>
+              <dd className="text-lg font-bold">{n1(res.kwh)} số</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm">Giá mỗi số (1 kWh)</dt>
+              <dd className="font-semibold">{moneyD(inv.elec_price)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-t border-black/10 pt-2">
+              <dt className="text-sm">Thành tiền</dt>
+              <dd className="text-lg font-bold">{moneyD(res.elecAmount)}</dd>
+            </div>
+          </dl>
           <Compare
             title="Dùng nhiều hay ít hơn tháng trước?"
             colorClass="bg-c-elec"
