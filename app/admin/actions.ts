@@ -159,9 +159,19 @@ export async function saveRoomAction(fd: FormData) {
       init_elec: Math.max(intOf(fd, "init_elec"), 0),
       init_water: Math.max(intOf(fd, "init_water"), 0),
     });
+  });
+}
+
+/** Lưu các khoản phí của một phòng trong trang Nhập số. */
+export async function saveFeesAction(fd: FormData) {
+  await requireAdmin();
+  const back = safeBack(fd);
+  const roomId = intOf(fd, "room");
+  await run(back, "Đã lưu các khoản phí. Tháng sau sẽ tự dùng lại.", async () => {
     const types = await Q.listFeeTypes();
-    await Q.saveRoomFees(
-      id,
+    await Q.saveInvoiceFees(
+      roomId,
+      periodOf(fd),
       types.map((t) => ({
         fee_type_id: t.id,
         enabled: fd.get(`fee_on_${t.id}`) === "on",
@@ -245,6 +255,8 @@ export async function createFeeTypeAction(fd: FormData) {
     async () => {
       if (!name) throw new Error("Hãy nhập tên loại phí.");
       await Q.createFeeType(name, methodOf(fd), Math.max(intOf(fd, "amount"), 0), roomId || undefined);
+      const period = str(fd, "period");
+      if (roomId && isPeriod(period)) await Q.refreshInvoiceFees(roomId, period);
     },
   );
 }

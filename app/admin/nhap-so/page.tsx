@@ -2,9 +2,10 @@ import Link from "next/link";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
+import { FeeTypes } from "@/components/FeeTypes";
 import { ReadingForm } from "@/components/ReadingForm";
 import { SendLink } from "@/components/SendLink";
-import { computeInvoice } from "@/lib/billing";
+import { FEE_METHOD_LABEL, computeInvoice } from "@/lib/billing";
 import {
   currentPeriod,
   isPeriod,
@@ -17,6 +18,7 @@ import { first, type SP } from "@/lib/params";
 import {
   getInvoice,
   getRoom,
+  getRoomFeeRows,
   getSettings,
   invoiceInput,
   invoiceResult,
@@ -28,6 +30,7 @@ import {
   addAdjustmentAction,
   publishRoomAction,
   removeAdjustmentAction,
+  saveFeesAction,
   saveReadingAction,
   unpublishRoomAction,
 } from "../actions";
@@ -87,6 +90,7 @@ export default async function EnterReadings({
   const inv =
     byRoom.get(selected.id) ?? (await getInvoice(selected.id, period));
   const defaults = await readingDefaults(selected, inv, period);
+  const feeRows = await getRoomFeeRows(selected.id);
   const back = `/admin/nhap-so?m=${period}&room=${selected.id}`;
 
   // Tạm tính: dùng số đã lưu và giá hiện hành (nếu chưa có hóa đơn thì dùng cài đặt hiện tại).
@@ -218,7 +222,91 @@ export default async function EnterReadings({
         />
       </section>
 
-      <details className="card mb-3" open={(inv?.adjustments.length ?? 0) > 0}>
+      <section className="card mb-3">
+        <form
+          action={saveFeesAction}
+          className="flex flex-col gap-3"
+          key={`fees-${selected.id}-${period}`}
+        >
+          <input type="hidden" name="room" value={selected.id} />
+          <input type="hidden" name="period" value={period} />
+          <input type="hidden" name="back" value={back} />
+          <div>
+            <h3 className="text-base font-bold">Các khoản phí khác</h3>
+            <p className="text-sm text-muted">
+              Tự lấy theo lần lưu gần nhất (tháng trước). Bấm lưu để áp dụng cho
+              tháng này và các tháng sau.
+            </p>
+          </div>
+          {feeRows.length === 0 ? (
+            <p className="text-sm text-muted">
+              Chưa có loại phí nào. Thêm ở phần &quot;Thêm khoản phí mới&quot;
+              bên dưới.
+            </p>
+          ) : null}
+          {feeRows.map((f) => (
+            <div
+              key={`${f.id}-${f.enabled}-${f.room_amount}-${f.quantity}`}
+              className="flex flex-col gap-2 border-t border-line pt-3"
+            >
+              <label className="flex min-h-11 items-center gap-3">
+                <input
+                  type="checkbox"
+                  name={`fee_on_${f.id}`}
+                  defaultChecked={f.enabled}
+                  className="size-5"
+                />
+                <span className="font-medium">{f.name}</span>
+                <span className="ml-auto text-xs text-muted">
+                  {FEE_METHOD_LABEL[f.method]}
+                </span>
+              </label>
+              <div
+                className={
+                  f.method === "per_unit" ? "grid grid-cols-2 gap-3" : ""
+                }
+              >
+                <div>
+                  <label htmlFor={`fa-${f.id}`} className="label">
+                    Mức (mặc định {moneyD(f.default_amount)})
+                  </label>
+                  <MoneyInput
+                    id={`fa-${f.id}`}
+                    name={`fee_amount_${f.id}`}
+                    placeholder={String(f.default_amount)}
+                    defaultValue={
+                      f.room_amount === null ? "" : String(f.room_amount)
+                    }
+                  />
+                </div>
+                {f.method === "per_unit" ? (
+                  <div>
+                    <label htmlFor={`fq-${f.id}`} className="label">
+                      Số lượng
+                    </label>
+                    <input
+                      id={`fq-${f.id}`}
+                      name={`fee_qty_${f.id}`}
+                      inputMode="numeric"
+                      defaultValue={String(f.quantity)}
+                      className="input"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {feeRows.length > 0 ? (
+            <button type="submit" className="btn-primary">
+              Lưu các khoản phí
+            </button>
+          ) : null}
+        </form>
+      </section>
+
+      <FeeTypes roomId={selected.id} back={back} period={period} />
+
+      <details className="card my-3" open={(inv?.adjustments.length ?? 0) > 0}>
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between">
           <span className="text-base font-bold">
             Khoản phát sinh

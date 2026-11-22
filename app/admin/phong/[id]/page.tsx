@@ -3,12 +3,9 @@ import { notFound } from "next/navigation";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
-import { FeeTypes } from "@/components/FeeTypes";
 import { TokenPanel } from "@/components/TokenPanel";
-import { FEE_METHOD_LABEL } from "@/lib/billing";
-import { moneyD } from "@/lib/format";
 import { first, type SP } from "@/lib/params";
-import { getRoom, getRoomFeeRows } from "@/lib/queries";
+import { getRoom } from "@/lib/queries";
 import { deleteRoomAction, saveRoomAction } from "../../actions";
 
 export const metadata = { title: "Chi tiết phòng" };
@@ -25,7 +22,6 @@ export default async function RoomPage({
   if (!Number.isInteger(roomId)) notFound();
   const r = await getRoom(roomId);
   if (!r) notFound();
-  const feeRows = await getRoomFeeRows(r.id);
 
   return (
     <main className="flex flex-col gap-4">
@@ -115,68 +111,10 @@ export default async function RoomPage({
           Phòng đang trống (không tạo hóa đơn)
         </label>
 
-        <fieldset className="flex flex-col gap-2 rounded-xl border border-line p-3">
-          <legend className="px-1 text-sm font-semibold">
-            Các khoản phí của phòng này
-          </legend>
-          {feeRows.length === 0 ? (
-            <p className="text-sm text-muted">
-              Chưa có loại phí nào. Thêm ở phần &quot;Thêm khoản phí mới&quot; bên dưới.
-            </p>
-          ) : null}
-          {feeRows.map((f) => (
-            <div
-              key={f.id}
-              className="grid grid-cols-[auto_1fr_7rem] items-end gap-3 border-t border-line pt-2 first:border-0 first:pt-0"
-            >
-              <label className="flex min-h-12 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name={`fee_on_${f.id}`}
-                  defaultChecked={f.enabled}
-                  className="size-5"
-                />
-                <span className="font-medium">{f.name}</span>
-              </label>
-              <div>
-                <label htmlFor={`fa-${r.id}-${f.id}`} className="label">
-                  Mức riêng (mặc định {moneyD(f.default_amount)})
-                </label>
-                <MoneyInput
-                  id={`fa-${r.id}-${f.id}`}
-                  name={`fee_amount_${f.id}`}
-                  placeholder={String(f.default_amount)}
-                  defaultValue={f.room_amount === null ? "" : String(f.room_amount)}
-                />
-              </div>
-              {f.method === "per_unit" ? (
-                <div>
-                  <label htmlFor={`fq-${r.id}-${f.id}`} className="label">
-                    Số lượng
-                  </label>
-                  <input
-                    id={`fq-${r.id}-${f.id}`}
-                    name={`fee_qty_${f.id}`}
-                    inputMode="numeric"
-                    defaultValue={String(f.quantity)}
-                    className="input"
-                  />
-                </div>
-              ) : (
-                <p className="pb-3 text-xs text-muted">
-                  {FEE_METHOD_LABEL[f.method]}
-                </p>
-              )}
-            </div>
-          ))}
-        </fieldset>
-
         <button type="submit" className="btn-primary">
           Lưu phòng
         </button>
       </form>
-
-      <FeeTypes roomId={r.id} back={`/admin/phong/${r.id}`} />
 
       <section className="card flex flex-col gap-3">
         <h2 className="text-base font-bold">Link xem hóa đơn của người thuê</h2>

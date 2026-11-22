@@ -11,15 +11,19 @@ const METHODS = Object.keys(FEE_METHOD_LABEL) as FeeMethod[];
 export function FeeTypes({
   roomId,
   back,
+  period,
 }: {
   roomId: number;
   back: string;
+  /** Kỳ đang xem (YYYY-MM): có thì hóa đơn kỳ đó cập nhật theo phí mới. */
+  period?: string;
 }) {
   return (
     <section className="card">
       <form action={createFeeTypeAction} className="grid grid-cols-2 gap-3">
         <input type="hidden" name="room" value={roomId} />
         <input type="hidden" name="back" value={back} />
+        {period ? <input type="hidden" name="period" value={period} /> : null}
         <div className="col-span-2">
           <h2 className="text-base font-bold">
             <span aria-hidden className="mr-2">

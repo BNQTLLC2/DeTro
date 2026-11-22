@@ -337,6 +337,33 @@ export async function saveRoomFees(
   }
 }
 
+/**
+ * Lưu các khoản phí của phòng ngay trên trang Nhập số.
+ * Cài đặt phí được ghi nhớ theo phòng nên tháng sau tự dùng lại số của tháng này,
+ * đồng thời cập nhật phí của hóa đơn tháng đang xem (hóa đơn đã công bố tự chuyển về "chưa công bố").
+ */
+export async function saveInvoiceFees(
+  roomId: number,
+  period: string,
+  items: { fee_type_id: number; enabled: boolean; amount: number | null; quantity: number }[],
+): Promise<void> {
+  const room = await getRoom(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng.");
+  await saveRoomFees(roomId, items);
+  const inv = await ensureInvoice(room, period);
+  const fees = await feesForRoom(room);
+  await q("update invoices set fees=$2::jsonb, published=false where id=$1", [inv.id, JSON.stringify(fees)]);
+}
+
+/** Cập nhật lại phí của hóa đơn tháng này theo cài đặt hiện tại (không tạo hóa đơn mới nếu chưa có). */
+export async function refreshInvoiceFees(roomId: number, period: string): Promise<void> {
+  const room = await getRoom(roomId);
+  const inv = await getInvoice(roomId, period);
+  if (!room || !inv) return;
+  const fees = await feesForRoom(room);
+  await q("update invoices set fees=$2::jsonb, published=false where id=$1", [inv.id, JSON.stringify(fees)]);
+}
+
 async function feesForRoom(room: Room): Promise<Fee[]> {
   const rows = await getRoomFeeRows(room.id);
   const types: FeeType[] = rows.map((r) => ({
