@@ -122,10 +122,14 @@ export async function addAdjustmentAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const roomId = intOf(fd, "room");
   const name = str(fd, "name");
-  const amount = intOf(fd, "amount", NaN);
-  return run("Đã thêm khoản phát sinh.", async () => {
-    if (!name) throw new Error("Hãy nhập tên khoản phát sinh.");
-    if (!Number.isFinite(amount) || amount === 0) throw new Error("Số tiền không hợp lệ (có thể nhập số âm để giảm trừ).");
+  const discount = str(fd, "discount") === "1";
+  const raw = intOf(fd, "amount", NaN);
+  // Giảm giá: người dùng nhập số dương, lưu thành số âm để trừ vào hóa đơn.
+  const amount = discount && Number.isFinite(raw) ? -Math.abs(raw) : raw;
+  return run(discount ? "Đã thêm giảm giá." : "Đã thêm khoản phát sinh.", async () => {
+    if (!name) throw new Error(discount ? "Hãy nhập tên khoản giảm giá." : "Hãy nhập tên khoản phát sinh.");
+    if (!Number.isFinite(amount) || amount === 0)
+      throw new Error(discount ? "Hãy nhập số tiền giảm." : "Số tiền không hợp lệ (có thể nhập số âm để giảm trừ).");
     await Q.addAdjustment(roomId, periodOf(fd), name, amount);
   });
 }
