@@ -1,8 +1,10 @@
-import { passwordConfigured } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { isAdmin, passwordConfigured } from "@/lib/auth";
 
 export const metadata = { title: "Đăng nhập" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
+  if (await isAdmin()) redirect("/admin");
   const { e } = await searchParams;
   const configured = passwordConfigured();
   const msg =
