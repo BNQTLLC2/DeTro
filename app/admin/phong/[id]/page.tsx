@@ -16,44 +16,23 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   if (!r) notFound();
 
   const all = await listRooms();
-  const idx = all.findIndex((x) => x.id === r.id);
-  const prev = idx > 0 ? all[idx - 1] : null;
-  const next = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
-  const floor = r.name.trim().match(/(\d)\d{2}$/)?.[1];
 
   return (
     <main className="flex flex-col gap-4">
-      <header className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <Link
-            href="/admin/phong"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-ink no-underline transition-colors hover:border-accent"
-          >
-            <span aria-hidden className="text-lg leading-none">←</span>
-            Tất cả phòng
-          </Link>
-          <nav className="flex items-center gap-2" aria-label="Chuyển phòng">
-            <RoomStep room={prev} dir="prev" />
-            <RoomStep room={next} dir="next" />
-          </nav>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-bold">
-            <span className="font-medium text-muted">Phòng </span>
-            {r.name}
-          </h1>
-          {floor && <span className="chip bg-accent-soft text-accent">Tầng {floor}</span>}
-          {r.is_vacant ? (
-            <span className="chip bg-warn-bg text-warn">Trống</span>
-          ) : (
-            <span className="chip bg-ok-bg text-ok">Đang thuê</span>
-          )}
-        </div>
-      </header>
+      <Link
+        href="/admin/phong"
+        className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-muted no-underline"
+      >
+        <span aria-hidden className="text-lg leading-none">‹</span>
+        Tất cả phòng
+      </Link>
 
       <ActionForm action={saveRoomAction} className="card flex flex-col gap-3">
         <input type="hidden" name="id" value={r.id} />
         <RoomFormFields
+          roomId={r.id}
+          roomName={r.name}
+          rooms={all.map((x) => ({ id: x.id, name: x.name, is_vacant: x.is_vacant }))}
           r={{
             rent: String(r.rent),
             tenant_name: r.tenant_name,
@@ -86,29 +65,5 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
         </p>
       </section>
     </main>
-  );
-}
-
-function RoomStep({ room, dir }: { room: { id: number; name: string } | null; dir: "prev" | "next" }) {
-  const cls =
-    "inline-flex min-h-11 min-w-16 items-center justify-center gap-1 rounded-xl border border-line bg-surface px-3 text-sm font-semibold no-underline";
-  const arrow = dir === "prev" ? "‹" : "›";
-  if (!room)
-    return (
-      <span className={`${cls} opacity-35`} aria-hidden>
-        {dir === "prev" ? arrow : null}
-        {dir === "prev" ? null : arrow}
-      </span>
-    );
-  return (
-    <Link
-      href={`/admin/phong/${room.id}`}
-      aria-label={`${dir === "prev" ? "Phòng trước" : "Phòng sau"}: ${room.name}`}
-      className={`${cls} text-ink transition-colors hover:border-accent`}
-    >
-      {dir === "prev" && <span aria-hidden>{arrow}</span>}
-      {room.name}
-      {dir === "next" && <span aria-hidden>{arrow}</span>}
-    </Link>
   );
 }
