@@ -29,7 +29,6 @@ import {
   publishRoomAction,
   removeAdjustmentAction,
   saveReadingAction,
-  setPaidAction,
   unpublishRoomAction,
 } from "../actions";
 
@@ -332,22 +331,6 @@ export default async function EnterReadings({
         <div className="grid grid-cols-2 gap-2">
           {published ? (
             <>
-              <form action={setPaidAction}>
-                <input type="hidden" name="room" value={selected.id} />
-                <input type="hidden" name="period" value={period} />
-                <input type="hidden" name="back" value={back} />
-                <input
-                  type="hidden"
-                  name="paid"
-                  value={inv?.paid_at ? "0" : "1"}
-                />
-                <button
-                  type="submit"
-                  className={`w-full ${inv?.paid_at ? "btn-ghost" : "btn-primary"}`}
-                >
-                  {inv?.paid_at ? "Bỏ đánh dấu đã thu" : "Đánh dấu đã thu"}
-                </button>
-              </form>
               <SendLink
                 compact
                 fill
@@ -355,7 +338,7 @@ export default async function EnterReadings({
                 phone={selected.tenant_phone.replace(/\D/g, "")}
                 message={`Chào ${selected.tenant_name || "bạn"}, hóa đơn ${selected.name} tháng ${periodLabel(period)} là ${moneyD(res.total)}. Xem chi tiết tại: {link}`}
               />
-              <form action={unpublishRoomAction} className="col-span-2">
+              <form action={unpublishRoomAction}>
                 <input type="hidden" name="room" value={selected.id} />
                 <input type="hidden" name="period" value={period} />
                 <input type="hidden" name="back" value={back} />
