@@ -8,7 +8,7 @@ import { TokenPanel } from "@/components/TokenPanel";
 import { FEE_METHOD_LABEL } from "@/lib/billing";
 import { moneyD } from "@/lib/format";
 import { first, type SP } from "@/lib/params";
-import { getRoom, getRoomFeeRows, listFeeTypes } from "@/lib/queries";
+import { getRoom, getRoomFeeRows } from "@/lib/queries";
 import { deleteRoomAction, saveRoomAction } from "../../actions";
 
 export const metadata = { title: "Chi tiết phòng" };
@@ -25,10 +25,7 @@ export default async function RoomPage({
   if (!Number.isInteger(roomId)) notFound();
   const r = await getRoom(roomId);
   if (!r) notFound();
-  const [feeRows, feeTypes] = await Promise.all([
-    getRoomFeeRows(r.id),
-    listFeeTypes(),
-  ]);
+  const feeRows = await getRoomFeeRows(r.id);
 
   return (
     <main className="flex flex-col gap-4">
@@ -124,7 +121,7 @@ export default async function RoomPage({
           </legend>
           {feeRows.length === 0 ? (
             <p className="text-sm text-muted">
-              Chưa có loại phí nào. Thêm ở phần &quot;Thêm / sửa loại phí&quot; bên dưới.
+              Chưa có loại phí nào. Thêm ở phần &quot;Thêm khoản phí mới&quot; bên dưới.
             </p>
           ) : null}
           {feeRows.map((f) => (
@@ -179,7 +176,7 @@ export default async function RoomPage({
         </button>
       </form>
 
-      <FeeTypes fees={feeTypes} roomId={r.id} back={`/admin/phong/${r.id}`} />
+      <FeeTypes roomId={r.id} back={`/admin/phong/${r.id}`} />
 
       <section className="card flex flex-col gap-3">
         <h2 className="text-base font-bold">Link xem hóa đơn của người thuê</h2>
