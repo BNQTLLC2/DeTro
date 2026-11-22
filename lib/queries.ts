@@ -473,6 +473,9 @@ export async function publishInvoice(roomId: number, period: string): Promise<vo
   if (!invoiceResult(inv).complete) throw new Error("Cần nhập đủ và đúng số điện và số nước trước khi công bố.");
   if (!inv.published_at) await refreshSnapshot(inv.id, room);
   await q("update invoices set published = true, published_at = coalesce(published_at, now()) where id = $1", [inv.id]);
+  // Tiền có thể đã về trước khi công bố: nếu đủ thì đánh dấu đã thu luôn.
+  const fresh = await getInvoiceById(inv.id);
+  if (fresh) await settleInvoice(fresh, todayVN());
 }
 
 export async function unpublishInvoice(roomId: number, period: string): Promise<void> {
@@ -534,6 +537,8 @@ export type Payment = {
   account: string;
   gateway: string;
   tx_date: string;
+  /** Kết quả xử lý: đã khớp hóa đơn nào, vì sao chưa khớp... */
+  note: string;
 };
 
 function toPayment(r: Row): Payment {
@@ -545,6 +550,7 @@ function toPayment(r: Row): Payment {
     account: r.account,
     gateway: r.gateway,
     tx_date: r.tx_date,
+    note: r.note ?? "",
   };
 }
 
@@ -590,6 +596,11 @@ export async function listUnmatchedPayments(limit = 10): Promise<Payment[]> {
   ).map(toPayment);
 }
 
+/** Giao dịch SePay gần đây (kèm kết quả xử lý) để chủ trọ đối chiếu. */
+export async function listRecentPayments(limit = 8): Promise<Payment[]> {
+  return (await q("select * from payments order by id desc limit $1", [limit])).map(toPayment);
+}
+
 export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
 
 /**
@@ -600,24 +611,49 @@ export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
  */
 export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResult> {
   const settings = await getSettings();
-  const wrongAccount = settings.bank_account !== "" && tx.accountNumber !== "" && tx.accountNumber !== settings.bank_account;
-  const invoiceId = wrongAccount ? null : parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
+  // Webhook đã xác thực bằng API Key nên không cần so số tài khoản (giao dịch giả lập của SePay dùng tài khoản ảo khác).
+  const invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
   const inv = invoiceId ? await getInvoiceById(invoiceId) : null;
 
+  let note = "";
+  if (!invoiceId) note = `Không thấy mã thanh toán (${settings.sepay_prefix}<số>) trong nội dung`;
+  else if (!inv) note = `Không có hóa đơn mã ${invoiceId}`;
+
   const rows = await q(
-    `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date)
-     values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict (sepay_id) do nothing returning id`,
-    [tx.id, inv ? inv.id : null, tx.transferAmount, tx.content, tx.code, tx.accountNumber, tx.gateway, tx.transactionDate],
+    `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date, note)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict (sepay_id) do nothing returning id`,
+    [tx.id, inv ? inv.id : null, tx.transferAmount, tx.content, tx.code, tx.accountNumber, tx.gateway, tx.transactionDate, note],
   );
   if (rows.length === 0) return "duplicate";
   if (!inv) return "unmatched";
 
+  const result = await settleInvoice(inv, /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN());
+  const why: Record<string, string> = {
+    paid: `Khớp hóa đơn #${inv.id}, đã đủ tiền và tự đánh dấu đã thu`,
+    recorded: "",
+  };
+  let finalNote = why[result.state] ?? "";
+  if (result.state === "recorded") {
+    finalNote = !inv.published
+      ? `Khớp hóa đơn #${inv.id} nhưng hóa đơn chưa công bố (sẽ tự đánh dấu đã thu khi công bố nếu đủ tiền)`
+      : !result.complete
+        ? `Khớp hóa đơn #${inv.id} nhưng chưa nhập đủ điện và nước`
+        : `Khớp hóa đơn #${inv.id}, mới nhận ${result.received.toLocaleString("vi-VN")}đ / ${result.total.toLocaleString("vi-VN")}đ, còn thiếu`;
+  }
+  await q("update payments set note = $2 where sepay_id = $1", [tx.id, finalNote]);
+  return result.state;
+}
+
+/** Nếu hóa đơn đã công bố, đủ số liệu và tiền đã nhận đủ thì đánh dấu đã thu. */
+async function settleInvoice(
+  inv: Invoice,
+  date: string,
+): Promise<{ state: "paid" | "recorded"; complete: boolean; received: number; total: number }> {
   const res = invoiceResult(inv);
   const received = await receivedFor(inv.id);
   if (inv.published && res.complete && received >= res.total && !inv.paid_at) {
-    const date = /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN();
     await q("update invoices set paid_at = $2 where id = $1", [inv.id, date]);
-    return "paid";
+    return { state: "paid", complete: true, received, total: res.total };
   }
-  return "recorded";
+  return { state: "recorded", complete: res.complete, received, total: res.total };
 }

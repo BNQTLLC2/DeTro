@@ -38,7 +38,8 @@ export async function POST(req: Request) {
   if (tx.transferType !== "in") return json({ success: true });
 
   try {
-    await recordSepayPayment(tx);
+    const r = await recordSepayPayment(tx);
+    console.log("SePay webhook", tx.id, tx.transferAmount, JSON.stringify(tx.content), "->", r);
   } catch (e) {
     console.error("SePay webhook lỗi", e);
     return json({ success: false, message: "Lỗi xử lý" }, 500); // SePay sẽ tự gửi lại

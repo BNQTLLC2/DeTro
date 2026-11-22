@@ -103,6 +103,7 @@ const SCHEMA: string[] = [
     tx_date text not null default '',
     created_at timestamptz not null default now()
   )`,
+  `alter table payments add column if not exists note text not null default ''`,
   `create table if not exists login_attempts (
     ip text not null,
     at timestamptz not null default now()

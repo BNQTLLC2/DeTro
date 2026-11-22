@@ -8,7 +8,7 @@ import {
   invoiceResult,
   listInvoices,
   listRooms,
-  listUnmatchedPayments,
+  listRecentPayments,
   receivedByInvoice,
   type Invoice,
   type Room,
@@ -42,12 +42,12 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   const period = isPeriod(m) ? m : currentPeriod();
   const back = `/admin?m=${period}`;
 
-  const [rooms, invoices, settings, received, unmatched] = await Promise.all([
+  const [rooms, invoices, settings, received, recent] = await Promise.all([
     listRooms(),
     listInvoices(period),
     getSettings(),
     receivedByInvoice(),
-    listUnmatchedPayments(10),
+    listRecentPayments(8),
   ]);
   const byRoom = new Map(invoices.map((i) => [i.room_id, i]));
 
@@ -117,23 +117,28 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         <p className="text-xs text-muted">Chỉ phòng đã công bố mới hiện hóa đơn trên trang của người thuê.</p>
       </section>
 
-      {unmatched.length > 0 ? (
-        <section className="mb-3 rounded-2xl border border-line bg-warn-bg p-4 text-warn">
-          <h2 className="font-bold">Tiền về chưa khớp hóa đơn ({unmatched.length})</h2>
-          <p className="mb-2 text-sm">
-            Người thuê có thể quên hoặc ghi sai nội dung chuyển khoản. Bạn đối chiếu rồi bấm &quot;Đánh dấu đã thu&quot; cho
-            đúng phòng.
-          </p>
-          <ul className="flex flex-col gap-1 text-sm">
-            {unmatched.map((p) => (
-              <li key={p.id} className="flex justify-between gap-3">
-                <span className="min-w-0 truncate">
-                  {p.tx_date.slice(0, 10)} · {p.content || "(không có nội dung)"}
+      {recent.length > 0 ? (
+        <section className="card mb-3 flex flex-col gap-2">
+          <h2 className="font-bold">Giao dịch SePay gần đây</h2>
+          <ul className="flex flex-col divide-y divide-line text-sm">
+            {recent.map((p) => (
+              <li key={p.id} className="flex flex-col gap-0.5 py-2">
+                <div className="flex justify-between gap-3">
+                  <span className="min-w-0 truncate">
+                    {p.tx_date.slice(0, 16)} · {p.content || "(không có nội dung)"}
+                  </span>
+                  <b className="shrink-0">{moneyD(p.amount)}</b>
+                </div>
+                <span className={`text-xs ${p.invoice_id === null ? "text-warn" : "text-muted"}`}>
+                  {p.invoice_id === null ? "⚠ Chưa khớp: " : "✓ "}
+                  {p.note || "Đã ghi nhận"}
                 </span>
-                <b className="shrink-0">{moneyD(p.amount)}</b>
               </li>
             ))}
           </ul>
+          <p className="text-xs text-muted">
+            Giao dịch chưa khớp hóa đơn nào thì bạn đối chiếu rồi bấm &quot;Đánh dấu đã thu&quot; cho đúng phòng.
+          </p>
         </section>
       ) : null}
 

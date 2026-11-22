@@ -118,12 +118,38 @@ describe("webhook /api/sepay với database thật", () => {
     expect(inv.paid_at).toBe("2026-11-22");
   });
 
-  it("tiền về không có mã hoặc sai tài khoản thì vào danh sách chưa khớp, không đụng hóa đơn", async () => {
+  it("tiền về không có mã thì vào danh sách chưa khớp, kèm lý do, không đụng hóa đơn", async () => {
     await call(tx({ id: 21, content: "chuyen tien tro", transferAmount: 100 }));
-    await call(tx({ id: 22, accountNumber: "9999999999", content: `TRO${invoiceId}`, transferAmount: 100 }));
+    await call(tx({ id: 22, content: "TRO99999 PHONG1", transferAmount: 100 }));
     const un = await Q.listUnmatchedPayments();
-    expect(un.map((p) => p.amount).sort()).toEqual([100, 100]);
+    expect(un.map((p) => p.amount)).toEqual([100, 100]);
+    expect(un.map((p) => p.note).join("|")).toMatch(/Không thấy mã/);
+    expect(un.map((p) => p.note).join("|")).toMatch(/Không có hóa đơn mã 99999/);
     expect(await Q.receivedFor(invoiceId)).toBe(total);
+  });
+
+  it("nội dung bị ngân hàng thêm chữ phía trước (DETRO1 PHONG1) và tài khoản giả lập vẫn khớp", async () => {
+    const [room] = await Q.listRooms();
+    await Q.saveReading(room.id, "2026-12", "elec", 100, 200);
+    await Q.saveReading(room.id, "2026-12", "water", 2, 4);
+    const inv2 = (await Q.getInvoice(room.id, "2026-12"))!;
+    await Q.publishInvoice(room.id, "2026-12");
+    const t2 = Q.invoiceResult((await Q.getInvoiceById(inv2.id))!).total;
+    await call(tx({ id: 41, accountNumber: "0000000001", content: `DETRO${inv2.id} PHONG1`, transferAmount: t2 }));
+    expect((await Q.getInvoiceById(inv2.id))!.paid_at).toBe("2026-11-22");
+    const recent = await Q.listRecentPayments(1);
+    expect(recent[0].note).toMatch(/đã đủ tiền/);
+  });
+
+  it("tiền về trước khi công bố: tự đánh dấu đã thu ngay khi công bố", async () => {
+    const [room] = await Q.listRooms();
+    await Q.saveReading(room.id, "2027-01", "elec", 200, 300);
+    await Q.saveReading(room.id, "2027-01", "water", 4, 6);
+    const inv3 = (await Q.getInvoice(room.id, "2027-01"))!;
+    await call(tx({ id: 51, content: `TRO${inv3.id}`, transferAmount: 99_000_000 }));
+    expect((await Q.getInvoiceById(inv3.id))!.paid_at).toBeNull();
+    await Q.publishInvoice(room.id, "2027-01");
+    expect((await Q.getInvoiceById(inv3.id))!.paid_at).not.toBeNull();
   });
 
   it("chưa cấu hình SEPAY_API_KEY thì từ chối mọi yêu cầu", async () => {
