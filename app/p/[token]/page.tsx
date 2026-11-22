@@ -377,7 +377,7 @@ export default async function TenantPage({
       {[
         {
           p: allPay,
-          title: "Chuyển khoản một lần: tiền trọ, điện, nước và các phí khác",
+          title: "Chuyển khoản một lần",
           what: "tất cả các khoản",
           edge: "!border-l-accent",
           chip: "bg-accent text-accent-ink",
@@ -388,14 +388,24 @@ export default async function TenantPage({
         p && p.qrReady ? (
           <section key={p.part} className={`card flex flex-col items-center gap-3 border-l-8 ${edge}`}>
             <h2 className="self-start text-lg font-bold">{title}</h2>
-            <p className={`w-full rounded-xl px-3 py-2 text-center text-base font-bold ${chip}`}>
-              Mã QR này để trả {what}: {moneyD(p.remaining)}
-            </p>
             {p.part === "all" ? (
-              <p className="w-full text-center text-sm text-muted">
-                Gồm tiền trọ {moneyD(inv.rent)} và điện, nước, phí khác {moneyD(res.othersTotal)}. Chỉ cần chuyển một lần.
+              <>
+                <div className={`w-full rounded-xl px-3 py-3 text-center ${chip}`}>
+                  <p className="text-sm font-medium">Số tiền cần chuyển</p>
+                  <p className="text-3xl font-bold leading-tight">{moneyD(p.remaining)}</p>
+                </div>
+                <dl className="grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 text-sm">
+                  <dt className="text-muted">Tiền trọ</dt>
+                  <dd className="text-right font-semibold">{moneyD(inv.rent)}</dd>
+                  <dt className="text-muted">Điện, nước, phí khác</dt>
+                  <dd className="text-right font-semibold">{moneyD(res.othersTotal)}</dd>
+                </dl>
+              </>
+            ) : (
+              <p className={`w-full rounded-xl px-3 py-2 text-center text-base font-bold ${chip}`}>
+                Mã QR này để trả {what}: {moneyD(p.remaining)}
               </p>
-            ) : null}
+            )}
             {p.received > 0 ? (
               <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
                 Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
