@@ -67,19 +67,19 @@ export function RoomFormFields({
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
           aria-label={`Phòng ${roomName}. Bấm để chọn phòng khác`}
-          className="flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-transparent bg-accent-soft leading-none text-accent transition-colors hover:border-accent"
+          className="flex h-[72px] w-[72px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-transparent bg-accent-soft leading-none text-accent transition-colors hover:border-accent"
         >
-          <span className="text-[11px] font-bold tracking-wide">{floor ? `TẦNG ${floor}` : "PHÒNG"}</span>
+          <span className="text-xs font-bold tracking-wide">{floor ? `TẦNG ${floor}` : "PHÒNG"}</span>
           <span className="mt-1 text-2xl font-extrabold">{roomName}</span>
-          <span aria-hidden className="mt-0.5 text-[10px] opacity-70">▾</span>
+          <span aria-hidden className="mt-0.5 text-xs opacity-70">▾</span>
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-extrabold">Phòng {roomName}</h1>
-          <p className="truncate text-sm text-muted">
+          <p className="truncate text-base text-muted">
             {vacant ? "Đang trống" : r.tenant_name || "Chưa nhập người thuê"}
           </p>
         </div>
-        <label className="flex shrink-0 cursor-pointer flex-col items-center gap-1 text-[11px] font-bold">
+        <label className="flex shrink-0 cursor-pointer flex-col items-center gap-1 text-sm font-bold">
           <input
             type="checkbox"
             checked={!vacant}
@@ -87,7 +87,7 @@ export function RoomFormFields({
             className="peer sr-only"
             aria-label="Phòng đang thuê"
           />
-          <span className="relative block h-7 w-12 rounded-full bg-warn-bg ring-1 ring-warn/40 transition-colors peer-checked:bg-ok peer-checked:ring-0 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:left-0.5 after:top-0.5 after:size-6 after:rounded-full after:bg-warn after:transition-all after:content-[''] peer-checked:after:left-[22px] peer-checked:after:bg-white" />
+          <span className="relative block h-8 w-14 rounded-full bg-warn-bg ring-1 ring-warn/40 transition-colors peer-checked:bg-ok peer-checked:ring-0 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:left-0.5 after:top-0.5 after:size-7 after:rounded-full after:bg-warn after:transition-all after:content-[''] peer-checked:after:left-[26px] peer-checked:after:bg-white" />
           <span className={vacant ? "text-warn" : "text-ok"}>{vacant ? "Trống" : "Đang thuê"}</span>
         </label>
       </div>
@@ -118,7 +118,7 @@ export function RoomFormFields({
             <div className="flex flex-col gap-4">
               {floors.map(([label, list]) => (
                 <section key={label}>
-                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{label}</h3>
+                  <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted">{label}</h3>
                   <ul className="grid grid-cols-3 gap-2">
                     {list.map((x) => {
                       const current = x.id === roomId;
@@ -134,7 +134,7 @@ export function RoomFormFields({
                           >
                             {x.name}
                             <span
-                              className={`text-[11px] font-semibold ${
+                              className={`text-sm font-semibold ${
                                 current ? "text-accent-ink" : x.is_vacant ? "text-warn" : "text-ok"
                               }`}
                             >
@@ -184,12 +184,12 @@ export function RoomFormFields({
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <fieldset className="flex flex-col gap-3 border-0 p-0">
-      <legend className="mb-3 flex w-full items-center gap-3 text-xs font-bold uppercase tracking-wide text-muted">
+      <legend className="mb-3 flex w-full items-center gap-3 text-sm font-bold uppercase tracking-wide text-muted">
         {title}
         <span className="h-px flex-1 bg-line" />
       </legend>
       <div className="grid grid-cols-2 gap-3">{children}</div>
-      {hint && <p className="text-xs text-muted">{hint}</p>}
+      {hint && <p className="text-sm text-muted">{hint}</p>}
     </fieldset>
   );
 }
