@@ -41,6 +41,9 @@ const SUBTLE = `${BTN_2ND} border-line text-muted hover:bg-idle-bg`;
 const CANCEL = `${BTN_2ND} border-bad/40 text-bad hover:bg-bad-bg`;
 const NEUTRAL = `${BTN_2ND} border-line text-ink hover:bg-idle-bg`;
 
+/** Tên hiển thị: luôn có chữ "Phòng" ở đầu (101 -> Phòng 101), tránh lặp nếu tên đã có sẵn. */
+const roomLabel = (name: string) => `Phòng ${name.trim().replace(/^Phòng\s*/i, "")}`;
+
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 
 /** Một đợt thu của phòng: tiền trọ (thu theo ngày vào ở) hoặc chi phí khác (thu ngày cố định). */
@@ -464,7 +467,7 @@ function RoomTile({
   if (status === "vacant") {
     return (
       <div className="flex h-full min-h-[6.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
-        <span className="text-2xl font-bold">{room.name.replace(/^Phòng\s*/i, "")}</span>
+        <span className="text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
         <span className="text-sm">Trống</span>
       </div>
     );
@@ -500,15 +503,13 @@ function RoomTile({
       }`}
     >
       <div className="px-3 pt-3 pb-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-2xl font-bold leading-tight">{room.name.replace(/^Phòng\s*/i, "")}</span>
-          <span className="truncate text-xs text-muted">
-            {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
-            {room.occupants} người
-          </span>
-        </div>
+        <span className="block truncate text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
         <p className={`truncate text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
           {room.tenant_name || "Chưa có tên"}
+        </p>
+        <p className="truncate text-xs text-muted">
+          {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
+          {room.occupants} người
         </p>
       </div>
 
@@ -583,7 +584,7 @@ function RoomItem({
           {room.name.replace(/^Phòng\s*/i, "")}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-bold">{room.name}</span>
+          <span className="block font-bold">{roomLabel(room.name)}</span>
           <span className="block text-sm text-muted">Chưa có người thuê</span>
         </span>
       </li>
@@ -611,7 +612,7 @@ function RoomItem({
             {room.name.replace(/^Phòng\s*/i, "")}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-bold">{room.name}</span>
+            <span className="block font-bold">{roomLabel(room.name)}</span>
             <span className="block break-words text-sm text-muted">
               {room.tenant_name || "Chưa nhập tên"}
             </span>
