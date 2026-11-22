@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -293,7 +294,6 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         <div className="flex flex-col gap-5">
           {floors.map((f) => {
             const used = f.rows.filter((r) => r.status !== "vacant").length;
-            const open = f.rows.find((r) => r.room.id === selected);
             return (
               <section key={f.label} className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
@@ -303,36 +303,25 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:gap-3">
-                  {f.rows.map((r) => (
-                    <li key={r.room.id} className="relative w-[7.25rem] shrink-0 snap-start sm:w-[11rem]">
-                      {r.room.id === selected ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute -bottom-2 left-1/2 z-10 -translate-x-1/2 border-x-[9px] border-t-[9px] border-x-transparent border-t-accent"
+                <ul className="flex flex-col gap-2.5">
+                  {f.rows.map((r) => {
+                    const got = r.inv ? (received.get(r.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 };
+                    const isSel = r.room.id === selected;
+                    return (
+                      <li key={r.room.id}>
+                        <RoomTile
+                          row={r}
+                          got={got}
+                          selected={isSel}
+                          href={`/admin?m=${period}${view !== "all" ? `&v=${view}` : ""}${
+                            isSel ? "" : `&room=${r.room.id}`
+                          }`}
+                          detail={<RoomItem row={r} period={period} got={got} />}
                         />
-                      ) : null}
-                      <RoomTile
-                        row={r}
-                        got={r.inv ? (received.get(r.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
-                        selected={r.room.id === selected}
-                        href={`/admin?m=${period}${view !== "all" ? `&v=${view}` : ""}${
-                          r.room.id === selected ? "" : `&room=${r.room.id}`
-                        }`}
-                      />
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
-                {open ? (
-                  <ul className="card -mt-2 overflow-hidden !border-2 !border-accent !p-0">
-                    <RoomItem
-                      row={open}
-                      period={period}
-                      open
-                      got={open.inv ? (received.get(open.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
-                    />
-                  </ul>
-                ) : null}
               </section>
             );
           })}
@@ -457,25 +446,26 @@ const DOT: Record<Status, { cls: string; icon: string }> = {
   paid: { cls: "bg-ok-bg text-ok", icon: "✓" },
 };
 
-/** Ô phòng trong lưới theo tầng: thông tin chính, trạng thái từng khoản và việc cần làm tiếp theo. */
+/** Thẻ phòng dạng dọc: thông tin chính, trạng thái từng khoản, việc cần làm; bấm để mở chi tiết ngay trong thẻ. */
 function RoomTile({
   row,
   got,
   selected,
   href,
+  detail,
 }: {
   row: RowData;
   got: { rent: number; other: number };
   selected: boolean;
   href: string;
+  detail: ReactNode;
 }) {
   const { room, parts, status } = row;
 
   if (status === "vacant") {
     return (
-      <div className="flex h-full min-h-[12.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
-        <span className="block text-xs leading-none">Phòng</span>
-        <span className="block text-2xl font-bold leading-tight">{num(room.name)}</span>
+      <div className="flex items-baseline gap-3 rounded-2xl border-2 border-dashed border-line px-4 py-3 text-muted">
+        <span className="text-lg font-bold text-ink/80">{roomLabel(room.name)}</span>
         <span className="text-sm">Trống</span>
       </div>
     );
@@ -491,77 +481,89 @@ function RoomTile({
   const action: Action = has("pending") ? "read" : has("draft") ? "pub" : has("unpaid") ? "pay" : "done";
   const actionLabel =
     action === "read"
-      ? "Nhập số"
+      ? "Chờ nhập số"
       : action === "pub"
-        ? "Công bố"
+        ? "Chờ công bố"
         : action === "pay"
-          ? `Thu ${moneyD(remaining)}`
+          ? `Chờ thu ${moneyD(remaining)}`
           : "Đã thu đủ";
   const actionIcon = { read: "✎", pub: "➤", pay: "₫", done: "✓" }[action];
   const showBar = sum.merged && !sum.allPaid && collected > 0 && sum.total > 0;
   const pct = sum.total > 0 ? Math.min(Math.round((collected / sum.total) * 100), 100) : 0;
 
   return (
-    <Link
-      href={href}
-      scroll={false}
-      aria-current={selected ? "true" : undefined}
-      className={`flex h-full min-h-[12.5rem] flex-col overflow-hidden rounded-2xl border no-underline transition-colors ${
-        selected ? "border-2 border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent"
+    <div
+      className={`overflow-hidden rounded-2xl bg-surface transition-colors ${
+        selected ? "border-2 border-accent" : "border border-line"
       }`}
     >
-      <div className="px-2.5 pt-3 pb-2 sm:px-3">
-        <span className="block text-xs leading-none text-muted">Phòng</span>
-        <span className="block text-2xl font-bold leading-tight">{num(room.name)}</span>
-        <p className={`break-words text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
-          {room.tenant_name || "Chưa có tên"}
-        </p>
-        <p className="break-words text-xs text-muted">
-          {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
-          {room.occupants} người
-        </p>
-      </div>
+      <Link
+        href={href}
+        scroll={false}
+        aria-expanded={selected}
+        className="block no-underline outline-offset-[-3px]"
+      >
+        <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-2.5">
+          <div className="min-w-0">
+            <p className="break-words text-xl font-bold leading-tight">{roomLabel(room.name)}</p>
+            <p className={`break-words text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
+              {room.tenant_name || "Chưa có tên"}
+            </p>
+            <p className="text-[13px] text-muted">
+              {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
+              {room.occupants} người
+            </p>
+          </div>
+          {sum.total > 0 ? (
+            <div className="shrink-0 text-right">
+              <p className="text-[17px] font-bold tabular-nums">{moneyD(sum.total)}</p>
+              <p className={`text-[13px] font-semibold ${ST[sum.tone].text}`}>{sum.toneLabel}</p>
+            </div>
+          ) : (
+            <p className={`shrink-0 text-right text-[13px] font-semibold ${ST[sum.tone].text}`}>{sum.toneLabel}</p>
+          )}
+        </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-2.5 pb-3 sm:gap-1.5 sm:px-3">
-        {parts.map((p) => {
-          const d = DOT[p.status];
-          return (
-            <div key={p.key} className="flex flex-col gap-0.5 text-xs text-muted sm:flex-row sm:items-center sm:gap-2">
-              <span className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex flex-col gap-2 px-4 pb-3">
+          {parts.map((p) => {
+            const d = DOT[p.status];
+            return (
+              <div key={p.key} className="flex items-center gap-2 text-sm text-muted">
                 <span
-                  className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
                   aria-hidden="true"
                 >
                   {d.icon}
                 </span>
                 <span>{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
-              </span>
-              <span className="break-words font-semibold text-ink sm:ml-auto sm:whitespace-nowrap">
-                {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
-              </span>
-            </div>
-          );
-        })}
-        {showBar ? (
-          <>
-            <div className="h-1 overflow-hidden rounded-full bg-idle-bg" role="img" aria-label={`Đã thu ${pct}%`}>
-              <div className="h-1 rounded-full bg-ok" style={{ width: `${pct}%` }} />
-            </div>
-            <p className="text-[11px] text-muted">
-              Đã thu {moneyD(collected)} / {moneyD(sum.total)}
-            </p>
-          </>
-        ) : null}
-      </div>
+                <span className="ml-auto whitespace-nowrap font-semibold tabular-nums text-ink">
+                  {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
+                </span>
+              </div>
+            );
+          })}
+          {showBar ? (
+            <>
+              <div className="h-1.5 overflow-hidden rounded-full bg-idle-bg" role="img" aria-label={`Đã thu ${pct}%`}>
+                <div className="h-1.5 rounded-full bg-ok" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-xs text-muted">
+                Đã thu {moneyD(collected)} / {moneyD(sum.total)}
+              </p>
+            </>
+          ) : null}
+        </div>
 
-      <div className={`flex items-center gap-1.5 px-2.5 py-2 text-sm font-semibold sm:px-3 ${ACTION_TONE[action]}`}>
-        <span aria-hidden="true">{actionIcon}</span>
-        <span className="min-w-0 break-words">{actionLabel}</span>
-        <span className="ml-auto" aria-hidden="true">
-          ›
-        </span>
-      </div>
-    </Link>
+        <div className={`flex items-center gap-2 px-4 py-2.5 text-[15px] font-semibold ${ACTION_TONE[action]}`}>
+          <span aria-hidden="true">{actionIcon}</span>
+          <span>{actionLabel}</span>
+          <span className={`ml-auto transition-transform ${selected ? "rotate-90" : ""}`} aria-hidden="true">
+            ›
+          </span>
+        </div>
+      </Link>
+      {selected ? detail : null}
+    </div>
   );
 }
 
@@ -577,33 +579,17 @@ function RoomItem({
   row,
   period,
   got,
-  open = false,
 }: {
   row: RowData;
   period: string;
   got: { rent: number; other: number };
-  open?: boolean;
 }) {
   const { room, inv, status, res, parts } = row;
 
-  if (status === "vacant") {
-    return (
-      <li className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3">
-        <span
-          className={`hidden size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold sm:flex ${ST.vacant.badge}`}
-        >
-          {room.name.replace(/^Phòng\s*/i, "")}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block whitespace-nowrap font-bold">{roomLabel(room.name)}</span>
-          <span className="block text-sm text-muted">Chưa có người thuê</span>
-        </span>
-      </li>
-    );
-  }
+  if (status === "vacant") return null;
 
   const hidden = { room: room.id, period };
-  const { merged, unpaidParts, allPaid, tone, toneLabel, total } = roomSummary(parts);
+  const { merged, unpaidParts, allPaid, total } = roomSummary(parts);
 
   // Số đã thu của một đợt: đã đánh dấu thu thì đủ, chưa thì tính theo tiền SePay đã nhận.
   const collectedOf = (p: PartInfo) =>
@@ -611,35 +597,8 @@ function RoomItem({
   const collected = parts.reduce((t, p) => t + collectedOf(p), 0);
   const remaining = Math.max(total - collected, 0);
   const pct = total > 0 ? Math.min(Math.round((collected / total) * 100), 100) : 0;
-  const s = ST[tone];
 
   return (
-    <li>
-      <details className="group" open={open}>
-        <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 [&::-webkit-details-marker]:hidden">
-          <span
-            className={`hidden size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold sm:flex ${s.badge}`}
-          >
-            {room.name.replace(/^Phòng\s*/i, "")}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block whitespace-nowrap font-bold">{roomLabel(room.name)}</span>
-            <span className="block break-words text-sm text-muted">
-              {room.tenant_name || "Chưa nhập tên"}
-            </span>
-          </span>
-          <span className="shrink-0 text-right">
-            {total > 0 ? <span className="block whitespace-nowrap font-bold">{moneyD(total)}</span> : null}
-            <span className={`block whitespace-nowrap text-sm font-semibold ${s.text}`}>{toneLabel}</span>
-          </span>
-          <span
-            className="shrink-0 text-muted transition-transform group-open:rotate-180"
-            aria-hidden="true"
-          >
-            ▾
-          </span>
-        </summary>
-
         <div className="flex flex-col border-t border-line">
           {/* Gộp: thanh tổng + tiến độ */}
           {merged ? (
@@ -803,7 +762,5 @@ function RoomItem({
             </Link>
           </div>
         </div>
-      </details>
-    </li>
   );
 }

@@ -40,39 +40,41 @@ export default async function RoomsPage() {
                 </span>
                 <span className="h-px flex-1 bg-line" />
               </div>
-              <ul className="flex snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:gap-3">
+              <ul className="flex flex-col gap-2.5">
                 {f.rooms.map((r) => (
-                  <li key={r.id} className="w-[7.25rem] shrink-0 snap-start sm:w-[11rem]">
+                  <li key={r.id}>
                     <Link
                       href={`/admin/phong/${r.id}`}
-                      className={`card flex h-full flex-col gap-1 border-l-4 !p-3 no-underline transition-colors hover:border-accent ${
+                      className={`card flex items-start justify-between gap-3 border-l-4 !px-4 !py-3 no-underline transition-colors hover:border-accent ${
                         r.is_vacant ? "border-l-warn" : "border-l-ok"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="flex flex-col">
-                          <span className="text-xs leading-none text-muted">Phòng</span>
-                          <span className="text-2xl font-bold leading-tight">{r.name.trim().replace(/^Phòng\s*/i, "")}</span>
+                      <span className="min-w-0">
+                        <span className="block break-words text-xl font-bold leading-tight">
+                          {`Phòng ${r.name.trim().replace(/^Phòng\s*/i, "")}`}
                         </span>
+                        {r.is_vacant ? null : (
+                          <>
+                            <span className={`block break-words text-sm font-medium ${r.tenant_name ? "" : "text-muted"}`}>
+                              {r.tenant_name || "Chưa có tên"}
+                            </span>
+                            <span className="block text-[13px] text-muted">
+                              {r.rent > 0 ? moneyD(r.rent) : "Chưa có giá"}
+                              {" · "}
+                              {r.occupants} người
+                            </span>
+                          </>
+                        )}
+                      </span>
+                      <span
+                        className={`flex shrink-0 items-center gap-2 text-sm font-semibold ${r.is_vacant ? "text-warn" : "text-ok"}`}
+                      >
                         <span
-                          className={`size-2.5 shrink-0 rounded-full ${r.is_vacant ? "bg-warn" : "bg-ok"}`}
-                          aria-label={r.is_vacant ? "Trống" : "Đang thuê"}
+                          className={`size-2.5 rounded-full ${r.is_vacant ? "bg-warn" : "bg-ok"}`}
+                          aria-hidden="true"
                         />
-                      </div>
-                      {r.is_vacant ? (
-                        <p className="text-sm font-medium text-warn">Trống</p>
-                      ) : (
-                        <>
-                          <p className={`break-words text-sm font-medium ${r.tenant_name ? "" : "text-muted"}`}>
-                            {r.tenant_name || "Chưa có tên"}
-                          </p>
-                          <p className="break-words text-xs text-muted">
-                            {r.rent > 0 ? moneyD(r.rent) : "Chưa có giá"}
-                            {" · "}
-                            {r.occupants} người
-                          </p>
-                        </>
-                      )}
+                        {r.is_vacant ? "Trống" : "Đang thuê"}
+                      </span>
                     </Link>
                   </li>
                 ))}
