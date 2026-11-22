@@ -118,11 +118,11 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
 
   return (
-    <main className="flex flex-col gap-5">
+    <main className="flex flex-col gap-4">
       <Flash ok={first(sp.ok)} error={first(sp.error)} />
 
       {/* Tổng kết tháng */}
-      <section className="rounded-3xl bg-accent p-5 text-accent-ink">
+      <section className="rounded-3xl bg-accent p-4 text-accent-ink">
         <div className="flex items-center justify-between gap-3">
           <Link
             href={`/admin?m=${shiftPeriod(period, -1)}`}
@@ -157,7 +157,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   ? "Đã thu đủ"
                   : "Còn phải thu"}
             </p>
-            <p className="text-4xl font-bold leading-tight">
+            <p className="text-3xl font-bold leading-tight">
               {moneyD(remaining)}
             </p>
           </div>

@@ -85,14 +85,14 @@
 html {
   background: var(--bg);
   color: var(--ink);
-  /* Cỡ chữ gốc lớn hơn mặc định (18px) cho người lớn tuổi; chọn được 3 mức bằng nút "Aa". */
-  font-size: 112.5%;
+  /* Cỡ chữ gốc 16px; chọn thêm 2 mức lớn hơn bằng nút "Aa". */
+  font-size: 100%;
 }
 html[data-fs="l"] {
-  font-size: 125%;
+  font-size: 112.5%;
 }
 html[data-fs="xl"] {
-  font-size: 140%;
+  font-size: 125%;
 }
 
 body {
