@@ -99,16 +99,6 @@ const ST: Record<Status, { label: string; badge: string; text: string }> = {
   paid: { label: "Đã thu", badge: "bg-ok-bg text-ok", text: "text-ok" },
 };
 
-/** 3.424.500 -> "3,42tr"; 425.000 -> "425k" */
-function moneyShort(n: number): string {
-  if (Math.abs(n) >= 1_000_000)
-    return `${(n / 1_000_000)
-      .toFixed(2)
-      .replace(/\.?0+$/, "")
-      .replace(".", ",")}tr`;
-  return `${Math.round(n / 1000)}k`;
-}
-
 type Filter = "all" | "unpaid" | "draft" | "pending" | "paid";
 const FILTERS: Filter[] = ["all", "unpaid", "draft", "pending", "paid"];
 
@@ -194,88 +184,75 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
   return (
     <main className="flex flex-col gap-4">
-      {/* Tổng kết tháng */}
-      <section className="rounded-3xl bg-accent p-4 text-accent-ink">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href={`/admin?m=${shiftPeriod(period, -1)}`}
-            aria-label="Tháng trước"
-            className="flex size-11 items-center justify-center rounded-full bg-accent-ink/15 text-2xl no-underline"
-          >
-            ‹
-          </Link>
-          <div className="text-center">
-            <h1 className="text-lg font-bold leading-tight">
-              Tháng {periodLabel(period)}
-            </h1>
-            <p className="text-sm opacity-80">
-              {live}/{rooms.length} phòng đang thuê
-            </p>
-          </div>
-          <Link
-            href={`/admin?m=${shiftPeriod(period, 1)}`}
-            aria-label="Tháng sau"
-            className="flex size-11 items-center justify-center rounded-full bg-accent-ink/15 text-2xl no-underline"
-          >
-            ›
-          </Link>
-        </div>
-
-        <div className="mt-5 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base opacity-80">
-              {expected === 0
-                ? "Chưa có hóa đơn"
-                : remaining === 0
-                  ? "Đã thu đủ"
-                  : "Còn phải thu"}
-            </p>
-            <p className="text-3xl font-bold leading-tight">
-              {moneyD(remaining)}
-            </p>
-          </div>
-          <p className="shrink-0 rounded-full bg-accent-ink/15 px-3 py-1 text-lg font-bold">
-            {pct}%
-          </p>
-        </div>
-
-        <div
-          className="mt-4 h-2.5 overflow-hidden rounded-full bg-accent-ink/20"
-          role="img"
-          aria-label={`Đã thu ${pct}%`}
-        >
-          <div
-            className="h-2.5 rounded-full bg-accent-ink"
-            style={{ width: `${pct}%` }}
+      {/* Tổng kết tháng: một khối gọn, vòng tiến độ + số còn phải thu */}
+      <section className="flex items-center gap-4 rounded-3xl bg-accent p-4 text-accent-ink">
+        <svg width="72" height="72" viewBox="0 0 76 76" role="img" aria-label={`Đã thu ${pct}%`} className="shrink-0">
+          <circle cx="38" cy="38" r="31" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="8" />
+          <circle
+            cx="38"
+            cy="38"
+            r="31"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={`${(pct / 100) * 194.8} 194.8`}
+            transform="rotate(-90 38 38)"
           />
+          <text x="38" y="43" textAnchor="middle" fontSize="16" fontWeight="700" fill="currentColor">
+            {pct}%
+          </text>
+        </svg>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <Link
+              href={`/admin?m=${shiftPeriod(period, -1)}`}
+              aria-label="Tháng trước"
+              className="flex size-9 items-center justify-center rounded-full bg-accent-ink/15 text-xl no-underline"
+            >
+              ‹
+            </Link>
+            <h1 className="text-base font-bold leading-tight">Tháng {periodLabel(period)}</h1>
+            <Link
+              href={`/admin?m=${shiftPeriod(period, 1)}`}
+              aria-label="Tháng sau"
+              className="flex size-9 items-center justify-center rounded-full bg-accent-ink/15 text-xl no-underline"
+            >
+              ›
+            </Link>
+          </div>
+          <p className="text-sm opacity-85">
+            {expected === 0 ? "Chưa có hóa đơn" : remaining === 0 ? "Đã thu đủ" : "Còn phải thu"}
+          </p>
+          <p className="text-2xl font-bold leading-tight">{moneyD(remaining)}</p>
         </div>
-        <p className="mt-2 text-base opacity-90">
-          Đã thu {moneyD(collected)} / tổng {moneyD(expected)}
+        <p className="shrink-0 text-right text-sm opacity-85">
+          {live}/{rooms.length} phòng
+          <br />
+          đang thuê
         </p>
       </section>
 
-      {/* Ba con số theo trạng thái, bấm để lọc danh sách */}
-      <section className="grid grid-cols-3 gap-2">
+      {/* Việc cần làm: bấm để lọc các phòng, bấm lại để bỏ lọc */}
+      <section className="flex flex-wrap gap-2">
         {(
           [
-            ["paid", "Đã thu"],
-            ["unpaid", "Chưa thu"],
-            ["draft", "Chờ công bố"],
+            ["pending", "Nhập số", "✎", "bg-warn-bg text-warn"],
+            ["draft", "Công bố", "➤", "bg-accent-soft text-accent"],
+            ["unpaid", "Thu tiền", "₫", "bg-ok-bg text-ok"],
           ] as const
-        ).map(([k, label]) => (
+        ).map(([k, label, icon, tone]) => (
           <Link
             key={k}
             href={`/admin?m=${period}&v=${view === k ? "all" : k}`}
             aria-current={view === k ? "page" : undefined}
-            className={`card flex flex-col gap-0.5 !p-3 no-underline ${
-              view === k ? "!border-2 !border-accent" : ""
+            className={`flex min-h-11 items-center gap-2 rounded-full border-2 px-4 text-base no-underline ${tone} ${
+              view === k ? "border-current" : "border-transparent"
             }`}
           >
-            <span className={`text-sm font-semibold ${ST[k].text}`}>{label}</span>
-            <span className="text-xl font-bold leading-tight text-ink">
-              {moneyShort(sum[k])}
-            </span>
-            <span className="text-sm text-muted">{countAny[k]} phòng</span>
+            <span aria-hidden="true">{icon}</span>
+            {label}
+            <b>{countAny[k]}</b>
           </Link>
         ))}
       </section>
@@ -319,11 +296,12 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="grid grid-cols-3 gap-2 sm:gap-3">
+                <ul className="grid grid-cols-3 items-stretch gap-2 sm:gap-3">
                   {f.rows.map((r) => (
                     <li key={r.room.id}>
                       <RoomTile
                         row={r}
+                        got={r.inv ? (received.get(r.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
                         selected={r.room.id === selected}
                         href={`/admin?m=${period}${view !== "all" ? `&v=${view}` : ""}${
                           r.room.id === selected ? "" : `&room=${r.room.id}`
@@ -451,51 +429,123 @@ function roomSummary(parts: PartInfo[]) {
   return { total, merged, unpaidParts, allPaid, tone, toneLabel };
 }
 
-const TILE_EDGE: Record<Status, string> = {
-  vacant: "border-l-warn",
-  pending: "border-l-line",
-  draft: "border-l-warn",
-  unpaid: "border-l-bad",
-  paid: "border-l-ok",
+type Action = "read" | "pub" | "pay" | "done";
+const ACTION_TONE: Record<Action, string> = {
+  read: "bg-warn-bg text-warn",
+  pub: "bg-accent-soft text-accent",
+  pay: "bg-ok-bg text-ok",
+  done: "bg-idle-bg text-muted",
 };
-const TILE_DOT: Record<Status, string> = {
-  vacant: "bg-warn",
-  pending: "bg-muted",
-  draft: "bg-warn",
-  unpaid: "bg-bad",
-  paid: "bg-ok",
+const DOT: Record<Status, { cls: string; icon: string }> = {
+  vacant: { cls: "bg-idle-bg text-muted", icon: "–" },
+  pending: { cls: "bg-warn-bg text-warn", icon: "◷" },
+  draft: { cls: "bg-warn-bg text-warn", icon: "◷" },
+  unpaid: { cls: "bg-accent-soft text-accent", icon: "➤" },
+  paid: { cls: "bg-ok-bg text-ok", icon: "✓" },
 };
 
-/** Ô phòng nhỏ trong lưới theo tầng; bấm để mở thẻ thu tiền của phòng. */
-function RoomTile({ row, selected, href }: { row: RowData; selected: boolean; href: string }) {
+/** Ô phòng trong lưới theo tầng: thông tin chính, trạng thái từng khoản và việc cần làm tiếp theo. */
+function RoomTile({
+  row,
+  got,
+  selected,
+  href,
+}: {
+  row: RowData;
+  got: { rent: number; other: number };
+  selected: boolean;
+  href: string;
+}) {
   const { room, parts, status } = row;
-  const sum = roomSummary(parts);
-  const tone: Status = status === "vacant" ? "vacant" : sum.tone;
-  const body = (
-    <>
-      <div className="flex items-center justify-between gap-1">
-        <span className="text-xl font-bold">{room.name.replace(/^Phòng\s*/i, "")}</span>
-        <span className={`size-2.5 shrink-0 rounded-full ${TILE_DOT[tone]}`} aria-hidden="true" />
+
+  if (status === "vacant") {
+    return (
+      <div className="flex h-full min-h-[6.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
+        <span className="text-2xl font-bold">{room.name.replace(/^Phòng\s*/i, "")}</span>
+        <span className="text-sm">Trống</span>
       </div>
-      {status === "vacant" ? (
-        <p className="text-sm font-medium text-warn">Trống</p>
-      ) : (
-        <>
-          <p className={`truncate text-sm font-medium ${room.tenant_name ? "" : "text-muted"}`}>
-            {room.tenant_name || "Chưa có tên"}
-          </p>
-          <p className={`truncate text-xs font-semibold ${ST[tone].text}`}>{sum.toneLabel}</p>
-        </>
-      )}
-    </>
+    );
+  }
+
+  const sum = roomSummary(parts);
+  const collected = parts.reduce(
+    (t, p) => t + (p.status === "paid" ? (p.amount ?? 0) : Math.min(got[p.key], p.amount ?? 0)),
+    0,
   );
-  const cls = `card flex h-full flex-col gap-1 border-l-4 !p-3 no-underline ${TILE_EDGE[tone]} ${
-    selected ? "!border-2 !border-accent !border-l-4" : ""
-  }`;
-  if (status === "vacant") return <div className={cls}>{body}</div>;
+  const remaining = Math.max(sum.total - collected, 0);
+  const has = (st: Status) => parts.some((p) => p.status === st);
+  const action: Action = has("pending") ? "read" : has("draft") ? "pub" : has("unpaid") ? "pay" : "done";
+  const actionLabel =
+    action === "read"
+      ? "Nhập số"
+      : action === "pub"
+        ? "Công bố"
+        : action === "pay"
+          ? `Thu ${moneyD(remaining)}`
+          : "Đã thu đủ";
+  const actionIcon = { read: "✎", pub: "➤", pay: "₫", done: "✓" }[action];
+  const showBar = sum.merged && !sum.allPaid && collected > 0 && sum.total > 0;
+  const pct = sum.total > 0 ? Math.min(Math.round((collected / sum.total) * 100), 100) : 0;
+
   return (
-    <Link href={href} scroll={false} aria-current={selected ? "true" : undefined} className={`${cls} transition-colors hover:border-accent`}>
-      {body}
+    <Link
+      href={href}
+      scroll={false}
+      aria-current={selected ? "true" : undefined}
+      className={`flex h-full flex-col overflow-hidden rounded-2xl border bg-surface no-underline transition-colors ${
+        selected ? "border-2 border-accent" : "border-line hover:border-accent"
+      }`}
+    >
+      <div className="px-3 pt-3 pb-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-2xl font-bold leading-tight">{room.name.replace(/^Phòng\s*/i, "")}</span>
+          <span className="truncate text-xs text-muted">
+            {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
+            {room.occupants} người
+          </span>
+        </div>
+        <p className={`truncate text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
+          {room.tenant_name || "Chưa có tên"}
+        </p>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-1.5 px-3 pb-3">
+        {parts.map((p) => {
+          const d = DOT[p.status];
+          return (
+            <div key={p.key} className="flex items-center gap-2 text-xs text-muted">
+              <span
+                className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
+                aria-hidden="true"
+              >
+                {d.icon}
+              </span>
+              <span className="truncate">{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
+              <span className="ml-auto whitespace-nowrap font-semibold text-ink">
+                {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
+              </span>
+            </div>
+          );
+        })}
+        {showBar ? (
+          <>
+            <div className="h-1 overflow-hidden rounded-full bg-idle-bg" role="img" aria-label={`Đã thu ${pct}%`}>
+              <div className="h-1 rounded-full bg-ok" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-[11px] text-muted">
+              Đã thu {moneyD(collected)} / {moneyD(sum.total)}
+            </p>
+          </>
+        ) : null}
+      </div>
+
+      <div className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold ${ACTION_TONE[action]}`}>
+        <span aria-hidden="true">{actionIcon}</span>
+        <span className="truncate">{actionLabel}</span>
+        <span className="ml-auto" aria-hidden="true">
+          ›
+        </span>
+      </div>
     </Link>
   );
 }
