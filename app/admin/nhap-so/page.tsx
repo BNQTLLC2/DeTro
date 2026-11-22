@@ -138,7 +138,7 @@ export default async function EnterReadings({
               key={r.id}
               href={`/admin/nhap-so?m=${period}&room=${r.id}`}
               aria-current={active ? "true" : undefined}
-              className={`flex min-w-[84px] shrink-0 flex-col items-center gap-1 rounded-xl border-2 px-3 py-2 no-underline ${
+              className={`flex min-w-[84px] flex-1 shrink-0 basis-0 flex-col items-center justify-center gap-1 rounded-xl border-2 px-3 py-2 no-underline ${
                 active
                   ? "border-accent bg-accent-soft"
                   : "border-line bg-surface"

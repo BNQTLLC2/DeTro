@@ -87,10 +87,6 @@ export default async function SettingsPage({
         </button>
       </form>
 
-      <p className="px-1 text-xs text-muted">
-        Các loại phí (rác, wifi, gửi xe...) chỉnh trong trang từng phòng ở mục Phòng. Mật khẩu đăng nhập, tài khoản ngân hàng nhận tiền và kết nối SePay được đặt trong biến môi trường trên
-        Vercel (ADMIN_PASSWORD, SEPAY_API_KEY, SEPAY_PREFIX), không chỉnh ở đây.
-      </p>
     </main>
   );
 }

@@ -173,11 +173,11 @@ export default async function TenantPage({
                 key={i.period}
                 href={`/p/${token}?m=${i.period}`}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 min-w-[92px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
+                className={`flex min-h-14 min-w-[112px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
                   active ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"
                 }`}
               >
-                <span className="text-sm font-bold">Tháng {Number(i.period.split("-")[1])}</span>
+                <span className="text-sm font-bold">Tháng {periodLabel(i.period)}</span>
                 <span className="text-xs font-medium">{invState(i) ? "Chưa đóng" : "Đã đóng"}</span>
               </Link>
             );
@@ -344,13 +344,22 @@ export default async function TenantPage({
       ) : null}
 
       {/* Chuyển khoản: mỗi đợt thu một mã QR và nội dung riêng */}
+      {rentPay?.qrReady && otherPay?.qrReady ? (
+        <section className="rounded-2xl border border-warn bg-warn-bg p-4 text-sm font-medium text-warn">
+          Bạn có <b>2 khoản riêng</b>, mỗi khoản một mã QR: <b>Tiền trọ {moneyD(rentPay.remaining)}</b> và{" "}
+          <b>Điện, nước, phí khác {moneyD(otherPay.remaining)}</b>. Hãy chuyển lần lượt từng khoản, quét đúng mã QR của khoản đó.
+        </section>
+      ) : null}
       {[
-        { p: rentPay, title: "Chuyển khoản tiền trọ" },
-        { p: otherPay, title: "Chuyển khoản điện, nước và các phí khác" },
-      ].map(({ p, title }) =>
+        { p: rentPay, title: "Chuyển khoản tiền trọ", what: "tiền trọ", edge: "!border-l-c-rent", chip: "bg-c-rent text-white" },
+        { p: otherPay, title: "Chuyển khoản điện, nước và các phí khác", what: "điện, nước và các phí khác", edge: "!border-l-c-elec", chip: "bg-c-elec text-white" },
+      ].map(({ p, title, what, edge, chip }) =>
         p && p.qrReady ? (
-          <section key={p.part} className="card flex flex-col items-center gap-3">
+          <section key={p.part} className={`card flex flex-col items-center gap-3 border-l-8 ${edge}`}>
             <h2 className="self-start text-lg font-bold">{title}</h2>
+            <p className={`w-full rounded-xl px-3 py-2 text-center text-base font-bold ${chip}`}>
+              Mã QR này chỉ để trả {what}: {moneyD(p.remaining)}
+            </p>
             {p.received > 0 ? (
               <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
                 Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
