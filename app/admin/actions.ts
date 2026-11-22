@@ -104,6 +104,23 @@ export async function setPaidAction(fd: FormData): Promise<ActionState> {
   });
 }
 
+/**
+ * Thu gộp: đánh dấu đã thu (hoặc bỏ đánh dấu) cả tiền trọ và chi phí khác của phòng trong một lần bấm.
+ * Chỉ đổi đợt nào chưa ở đúng trạng thái, để không ghi đè ngày thu của đợt đã thu từ trước.
+ */
+export async function setPaidAllAction(fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const roomId = intOf(fd, "room");
+  const paid = str(fd, "paid") === "1";
+  const period = periodOf(fd);
+  return run(paid ? "Đã đánh dấu đã thu đủ." : "Đã bỏ đánh dấu đã thu.", async () => {
+    const inv = await Q.getInvoice(roomId, period);
+    if (!inv) throw new Error("Không tìm thấy hóa đơn.");
+    if (inv.rent_published && !!inv.rent_paid_at !== paid) await Q.setPaid(roomId, period, paid, "rent");
+    if (inv.published && !!inv.paid_at !== paid) await Q.setPaid(roomId, period, paid, "other");
+  });
+}
+
 /* ------------------------------ Nhập chỉ số ------------------------------ */
 
 export async function saveReadingAction(fd: FormData): Promise<ActionState> {

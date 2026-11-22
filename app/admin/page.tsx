@@ -27,6 +27,7 @@ import {
   publishRentAction,
   publishRoomAction,
   setPaidAction,
+  setPaidAllAction,
   unpublishRentAction,
   unpublishRoomAction,
 } from "./actions";
@@ -38,6 +39,7 @@ const BTN_2ND =
   "inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-xl border bg-surface px-4 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45";
 const SUBTLE = `${BTN_2ND} border-line text-muted hover:bg-idle-bg`;
 const CANCEL = `${BTN_2ND} border-bad/40 text-bad hover:bg-bad-bg`;
+const NEUTRAL = `${BTN_2ND} border-line text-ink hover:bg-idle-bg`;
 
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 
@@ -290,184 +292,14 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         ) : null}
 
         <ul className="card divide-y divide-line overflow-hidden !p-0">
-          {shown.map(({ room, inv, status, res, parts }) => {
-            const s = ST[status];
-            const got = inv ? (received.get(inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 };
-            const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
-            const hidden = { room: room.id, period };
-            const head = (
-              <>
-                <span
-                  className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${s.badge}`}
-                >
-                  {room.name.replace(/^Phòng\s*/i, "")}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-bold">{room.name}</span>
-                  <span className="block break-words text-sm text-muted">
-                    {room.is_vacant
-                      ? "Chưa có người thuê"
-                      : room.tenant_name || "Chưa nhập tên"}
-                  </span>
-                  <span className={`block text-sm font-semibold ${s.text}`}>
-                    {s.label}
-                  </span>
-                </span>
-                {total > 0 ? (
-                  <span className="shrink-0 whitespace-nowrap text-right font-bold">
-                    {moneyD(total)}
-                  </span>
-                ) : null}
-              </>
-            );
-
-            if (status === "vacant") {
-              return (
-                <li
-                  key={room.id}
-                  className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3"
-                >
-                  {head}
-                </li>
-              );
-            }
-
-            return (
-              <li key={room.id}>
-                <details className="group">
-                  <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-                    {head}
-                    <span
-                      className="shrink-0 text-muted transition-transform group-open:rotate-180"
-                      aria-hidden="true"
-                    >
-                      ▾
-                    </span>
-                  </summary>
-
-                  <div className="flex flex-col gap-3 px-4 pb-4">
-                    {parts.map((p) => {
-                      const ps = ST[p.status];
-                      const rcv = got[p.key];
-                      return (
-                        <div
-                          key={p.key}
-                          className="flex flex-col gap-2 rounded-xl border border-line p-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="font-bold">{p.label}</p>
-                              <p className="text-sm text-muted">Hạn thu {p.due}</p>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              {p.amount !== null ? (
-                                <p className="font-bold">{moneyD(p.amount)}</p>
-                              ) : null}
-                              <p className={`text-sm font-semibold ${ps.text}`}>
-                                {p.key === "rent" && p.status === "draft"
-                                  ? "Chưa công bố"
-                                  : ps.label}
-                              </p>
-                            </div>
-                          </div>
-
-                          {p.key === "other" && inv && res && p.amount !== null ? (
-                            <dl className="flex flex-col gap-1 text-sm">
-                              {(
-                                [
-                                  ["Điện (" + res.kwh + " kWh)", moneyD(res.elecAmount)],
-                                  ["Nước (" + res.m3 + " m³)", moneyD(res.waterAmount)],
-                                  [
-                                    "Phí khác",
-                                    moneyD(res.feesTotal + res.adjustmentsTotal),
-                                  ],
-                                ] as const
-                              ).map(([label, val]) => (
-                                <div key={label} className="flex justify-between gap-3">
-                                  <dt className="text-muted">{label}</dt>
-                                  <dd className="font-semibold">{val}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ) : null}
-
-                          {(p.status === "draft" || p.status === "unpaid") &&
-                          rcv > 0 &&
-                          p.amount !== null ? (
-                            <p className="text-sm font-medium text-ok">
-                              Đã nhận {moneyD(rcv)}
-                              {rcv < p.amount ? `, còn ${moneyD(p.amount - rcv)}` : ""}
-                            </p>
-                          ) : null}
-
-                          {p.key === "other" && p.status === "pending" ? (
-                            <Link
-                              href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                              className="btn-primary w-full"
-                            >
-                              Nhập số điện, nước
-                            </Link>
-                          ) : null}
-
-                          {p.status === "draft" ? (
-                            <ActionForm action={p.key === "rent" ? publishRentAction : publishRoomAction}>
-                              <Hidden {...hidden} />
-                              <SubmitButton className="btn-primary w-full" pendingText="Đang công bố...">
-                                {p.key === "rent"
-                                  ? "Công bố tiền trọ cho người thuê"
-                                  : "Công bố cho người thuê"}
-                              </SubmitButton>
-                            </ActionForm>
-                          ) : null}
-
-                          {p.status === "unpaid" ? (
-                            <div className="flex flex-col gap-2">
-                              <ActionForm action={setPaidAction}>
-                                <Hidden {...hidden} />
-                                <input type="hidden" name="part" value={p.key} />
-                                <input type="hidden" name="paid" value="1" />
-                                <SubmitButton className="btn-primary w-full" pendingText="Đang lưu...">
-                                  Đã thu {p.key === "rent" ? "tiền trọ" : "chi phí khác"}
-                                </SubmitButton>
-                              </ActionForm>
-                              <ActionForm action={p.key === "rent" ? unpublishRentAction : unpublishRoomAction}>
-                                <Hidden {...hidden} />
-                                <ConfirmButton
-                                  message={`Hủy công bố ${p.key === "rent" ? "tiền trọ" : "điện, nước, phí khác"} của ${room.name}? Người thuê sẽ không còn thấy khoản này.`}
-                                  className={CANCEL}
-                                  pendingText="Đang hủy..."
-                                >
-                                  Hủy công bố
-                                </ConfirmButton>
-                              </ActionForm>
-                            </div>
-                          ) : null}
-
-                          {p.status === "paid" ? (
-                            <ActionForm action={setPaidAction}>
-                              <Hidden {...hidden} />
-                              <input type="hidden" name="part" value={p.key} />
-                              <input type="hidden" name="paid" value="0" />
-                              <SubmitButton className={SUBTLE} pendingText="Đang lưu...">
-                                Bỏ đánh dấu đã thu
-                              </SubmitButton>
-                            </ActionForm>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-
-                    <Link
-                      href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                      className="text-sm font-semibold text-accent"
-                    >
-                      Xem / sửa chi tiết phòng
-                    </Link>
-                  </div>
-                </details>
-              </li>
-            );
-          })}
+          {shown.map((row) => (
+            <RoomItem
+              key={row.room.id}
+              row={row}
+              period={period}
+              got={row.inv ? (received.get(row.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
+            />
+          ))}
         </ul>
       </section>
 
@@ -533,5 +365,278 @@ function Hidden({ room, period }: { room: number; period: string }) {
       <input type="hidden" name="room" value={room} />
       <input type="hidden" name="period" value={period} />
     </>
+  );
+}
+
+
+type RowData = {
+  room: Room;
+  inv: Invoice | undefined;
+  status: Status;
+  res: ReturnType<typeof invoiceResult> | null;
+  parts: PartInfo[];
+};
+
+/** Chip nhỏ cạnh hạn thu: Chưa công bố / Chưa nhập số. */
+const CHIP = "chip w-fit !px-2 !py-0.5 !text-xs bg-warn-bg text-warn";
+
+/**
+ * Thẻ thu tiền của một phòng.
+ * - "Gộp": cả tiền trọ và chi phí khác đều đã công bố → một thanh tổng, một nút xác nhận chung.
+ * - "Chưa gộp": còn đợt chưa công bố / chưa nhập số → mỗi đợt có nút riêng.
+ */
+function RoomItem({
+  row,
+  period,
+  got,
+}: {
+  row: RowData;
+  period: string;
+  got: { rent: number; other: number };
+}) {
+  const { room, inv, status, res, parts } = row;
+
+  if (status === "vacant") {
+    return (
+      <li className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3">
+        <span
+          className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${ST.vacant.badge}`}
+        >
+          {room.name.replace(/^Phòng\s*/i, "")}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold">{room.name}</span>
+          <span className="block text-sm text-muted">Chưa có người thuê</span>
+        </span>
+      </li>
+    );
+  }
+
+  const hidden = { room: room.id, period };
+  const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
+  const merged =
+    parts.length === 2 && parts.every((p) => p.status === "unpaid" || p.status === "paid");
+  const unpaidParts = parts.filter((p) => p.status === "unpaid");
+  const allPaid = merged && unpaidParts.length === 0;
+
+  // Số đã thu của một đợt: đã đánh dấu thu thì đủ, chưa thì tính theo tiền SePay đã nhận.
+  const collectedOf = (p: PartInfo) =>
+    p.status === "paid" ? (p.amount ?? 0) : Math.min(got[p.key], p.amount ?? 0);
+  const collected = parts.reduce((t, p) => t + collectedOf(p), 0);
+  const remaining = Math.max(total - collected, 0);
+  const pct = total > 0 ? Math.min(Math.round((collected / total) * 100), 100) : 0;
+
+  // Màu và chữ ở đầu thẻ
+  let tone: Status;
+  let toneLabel: string;
+  if (merged) {
+    tone = allPaid ? "paid" : "unpaid";
+    toneLabel = allPaid ? "Đã thu đủ" : "Chưa thu đủ";
+  } else {
+    const unpaidSum = unpaidParts.reduce((t, p) => t + (p.amount ?? 0), 0);
+    tone = (["draft", "unpaid", "pending"] as const).find((st) => parts.some((p) => p.status === st)) ?? "paid";
+    toneLabel =
+      unpaidParts.length > 0
+        ? `Chưa thu ${moneyD(unpaidSum)}`
+        : tone === "draft"
+          ? "Chưa công bố"
+          : tone === "pending"
+            ? "Chưa nhập số"
+            : "Đã thu";
+  }
+  const s = ST[tone];
+
+  return (
+    <li>
+      <details className="group">
+        <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <span
+            className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${s.badge}`}
+          >
+            {room.name.replace(/^Phòng\s*/i, "")}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold">{room.name}</span>
+            <span className="block break-words text-sm text-muted">
+              {room.tenant_name || "Chưa nhập tên"}
+            </span>
+          </span>
+          <span className="shrink-0 text-right">
+            {total > 0 ? <span className="block whitespace-nowrap font-bold">{moneyD(total)}</span> : null}
+            <span className={`block whitespace-nowrap text-sm font-semibold ${s.text}`}>{toneLabel}</span>
+          </span>
+          <span
+            className="shrink-0 text-muted transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </summary>
+
+        <div className="flex flex-col border-t border-line">
+          {/* Gộp: thanh tổng + tiến độ */}
+          {merged ? (
+            <div className="flex flex-col gap-2 px-4 pt-3 pb-3">
+              {allPaid ? (
+                <p className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ok px-4 text-center text-base font-bold text-white">
+                  <span aria-hidden="true">✓</span> Đã thu đủ {moneyD(total)}
+                </p>
+              ) : (
+                <>
+                  <p className="flex min-h-11 items-center justify-center rounded-xl bg-bad-bg px-4 text-center text-base font-bold text-bad">
+                    Chưa thu đủ · còn {moneyD(remaining)}
+                  </p>
+                  <div
+                    className="h-1.5 overflow-hidden rounded-full bg-idle-bg"
+                    role="img"
+                    aria-label={`Đã thu ${pct}%`}
+                  >
+                    <div className="h-1.5 rounded-full bg-ok" style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className="text-sm text-muted">
+                    Đã thu {moneyD(collected)} / {moneyD(total)}
+                  </p>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {parts.map((p) => {
+            const ps = ST[p.status];
+            const rcv = got[p.key];
+            const rowCls = "flex flex-col gap-2 border-t border-line px-4 py-3 first:border-t-0";
+            return (
+              <div key={p.key} className={rowCls}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold">{p.label}</p>
+                    <p className="text-sm text-muted">Hạn thu {p.due}</p>
+                  </div>
+                  {p.amount !== null ? (
+                    <p className="shrink-0 font-bold">{moneyD(p.amount)}</p>
+                  ) : null}
+                </div>
+
+                {/* Chip trạng thái (chỉ khi chưa gộp) */}
+                {!merged && p.status === "draft" ? <span className={CHIP}>Chưa công bố</span> : null}
+                {!merged && p.status === "pending" ? <span className={CHIP}>Chưa nhập số</span> : null}
+                {!merged && p.status === "paid" ? (
+                  <span className={`chip w-fit !px-2 !py-0.5 !text-xs ${ps.badge}`}>Đã thu</span>
+                ) : null}
+
+                {p.key === "other" && p.status === "pending" ? (
+                  <p className="text-sm text-muted">
+                    Nhập số điện, nước tháng này để tính tiền và công bố cho người thuê.
+                  </p>
+                ) : null}
+
+                {p.key === "other" && inv && res && p.amount !== null ? (
+                  <dl className="flex flex-col gap-1 rounded-xl bg-bg px-3 py-2 text-sm">
+                    {(
+                      [
+                        ["Điện (" + res.kwh + " kWh)", moneyD(res.elecAmount)],
+                        ["Nước (" + res.m3 + " m³)", moneyD(res.waterAmount)],
+                        ["Phí khác", moneyD(res.feesTotal + res.adjustmentsTotal)],
+                      ] as const
+                    ).map(([label, val]) => (
+                      <div key={label} className="flex justify-between gap-3">
+                        <dt className="text-muted">{label}</dt>
+                        <dd className="font-semibold">{val}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+
+                {!merged && (p.status === "draft" || p.status === "unpaid") && rcv > 0 && p.amount !== null ? (
+                  <p className="text-sm font-medium text-ok">
+                    Đã nhận {moneyD(rcv)}
+                    {rcv < p.amount ? `, còn ${moneyD(p.amount - rcv)}` : ""}
+                  </p>
+                ) : null}
+
+                {p.key === "other" && p.status === "pending" ? (
+                  <Link
+                    href={`/admin/nhap-so?m=${period}&room=${room.id}`}
+                    className="btn-primary w-full"
+                  >
+                    Nhập số điện, nước
+                  </Link>
+                ) : null}
+
+                {p.status === "draft" ? (
+                  <ActionForm action={p.key === "rent" ? publishRentAction : publishRoomAction}>
+                    <Hidden {...hidden} />
+                    <SubmitButton className="btn-primary w-full" pendingText="Đang công bố...">
+                      {p.key === "rent" ? "Công bố tiền trọ" : "Công bố chi phí"}
+                    </SubmitButton>
+                  </ActionForm>
+                ) : null}
+
+                {p.status === "unpaid" ? (
+                  <div className={merged ? "" : "grid grid-cols-[1.4fr_1fr] gap-2"}>
+                    {!merged ? (
+                      <ActionForm action={setPaidAction}>
+                        <Hidden {...hidden} />
+                        <input type="hidden" name="part" value={p.key} />
+                        <input type="hidden" name="paid" value="1" />
+                        <SubmitButton className="btn-primary w-full" pendingText="Đang lưu...">
+                          Xác nhận đã thu
+                        </SubmitButton>
+                      </ActionForm>
+                    ) : null}
+                    <ActionForm action={p.key === "rent" ? unpublishRentAction : unpublishRoomAction}>
+                      <Hidden {...hidden} />
+                      <ConfirmButton
+                        message={`Hủy công bố ${p.key === "rent" ? "tiền trọ" : "điện, nước, phí khác"} của ${room.name}? Người thuê sẽ không còn thấy khoản này.`}
+                        className={merged ? CANCEL : `${NEUTRAL} !min-h-12`}
+                        pendingText="Đang hủy..."
+                      >
+                        Hủy công bố
+                      </ConfirmButton>
+                    </ActionForm>
+                  </div>
+                ) : null}
+
+                {!merged && p.status === "paid" ? (
+                  <ActionForm action={setPaidAction}>
+                    <Hidden {...hidden} />
+                    <input type="hidden" name="part" value={p.key} />
+                    <input type="hidden" name="paid" value="0" />
+                    <SubmitButton className={SUBTLE} pendingText="Đang lưu...">
+                      Bỏ đánh dấu đã thu
+                    </SubmitButton>
+                  </ActionForm>
+                ) : null}
+              </div>
+            );
+          })}
+
+          {/* Gộp: một nút chung ở cuối thẻ */}
+          {merged ? (
+            <div className="border-t border-line px-4 py-3">
+              <ActionForm action={setPaidAllAction}>
+                <Hidden {...hidden} />
+                <input type="hidden" name="paid" value={allPaid ? "0" : "1"} />
+                <SubmitButton
+                  className={allPaid ? SUBTLE : "btn-primary w-full"}
+                  pendingText="Đang lưu..."
+                >
+                  {allPaid ? "Bỏ đánh dấu đã thu" : `Xác nhận đã thu · ${moneyD(remaining)}`}
+                </SubmitButton>
+              </ActionForm>
+            </div>
+          ) : null}
+
+          <div className="border-t border-line px-4 py-3">
+            <Link
+              href={`/admin/nhap-so?m=${period}&room=${room.id}`}
+              className="text-sm font-semibold text-accent"
+            >
+              Xem / sửa chi tiết phòng
+            </Link>
+          </div>
+        </div>
+      </details>
+    </li>
   );
 }
