@@ -11,7 +11,7 @@ import {
   type RoomFee,
 } from "./billing";
 import { todayVN } from "./format";
-import { isValidPrefix, parsePaymentCode, type SepayPayload } from "./sepay";
+import { isValidPrefix, parsePaymentCode, parsePaymentRef, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
 
@@ -652,12 +652,24 @@ export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
 export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResult> {
   const settings = await getSettings();
   // Webhook đã xác thực bằng API Key nên không cần so số tài khoản (giao dịch giả lập của SePay dùng tài khoản ảo khác).
-  const invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
-  const inv = invoiceId ? await getInvoiceById(invoiceId) : null;
+  // Ưu tiên nội dung mới "<TIỀN TỐ>_<PHÒNG>_<MM>/<YYYY>"; không thấy thì dùng mã hóa đơn kiểu cũ "<TIỀN TỐ><số>".
+  const rooms = await listRooms();
+  const ref =
+    parsePaymentRef(settings.sepay_prefix, tx.content, rooms) ??
+    parsePaymentRef(settings.sepay_prefix, tx.code ?? "", rooms);
+  let inv: Invoice | null = ref ? await getInvoice(ref.roomId, ref.period) : null;
+  let invoiceId: number | null = inv ? inv.id : null;
+  if (!inv && !ref) {
+    invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
+    inv = invoiceId ? await getInvoiceById(invoiceId) : null;
+  }
 
   let note = "";
-  if (!invoiceId) note = `Không thấy mã thanh toán (${settings.sepay_prefix}<số>) trong nội dung`;
-  else if (!inv) note = `Không có hóa đơn mã ${invoiceId}`;
+  if (!inv) {
+    if (ref) note = `Không có hóa đơn của ${rooms.find((r) => r.id === ref.roomId)?.name ?? "phòng"} kỳ ${ref.period}`;
+    else if (invoiceId) note = `Không có hóa đơn mã ${invoiceId}`;
+    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY) trong nội dung`;
+  }
 
   const rows = await q(
     `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date, note)

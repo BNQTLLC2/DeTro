@@ -104,7 +104,7 @@ export default async function TenantPage({
   const received = paid ? 0 : await receivedFor(inv.id);
   const remaining = Math.max(res.total - received, 0);
   const qrReady = !paid && settings.bank_code !== "" && settings.bank_account !== "";
-  const content = paymentContent(settings.sepay_prefix, inv.id, room.name);
+  const content = paymentContent(settings.sepay_prefix, room.name, inv.period);
   const qrOpts = { account: settings.bank_account, bank: settings.bank_code, amount: remaining, content };
   const qrUrl = qrReady ? sepayQrUrl(qrOpts) : "";
   const qrDownloadUrl = qrReady ? sepayQrUrl({ ...qrOpts, download: true }) : "";

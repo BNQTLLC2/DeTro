@@ -21,15 +21,41 @@ export function isValidPrefix(p: string): boolean {
 }
 
 /**
- * Nội dung chuyển khoản: "<TIỀN TỐ><mã hóa đơn> <TÊN PHÒNG>", ví dụ "TRO123 PHONG3".
- * Phần đầu là mã để hệ thống tự khớp hóa đơn, phần sau để chủ trọ dễ đọc sao kê.
+ * Nội dung chuyển khoản: "<TIỀN TỐ>_<TÊN PHÒNG>_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_11/2026".
+ * `period` dạng "YYYY-MM". Hệ thống khớp hóa đơn theo tên phòng và tháng này.
  */
-export function paymentContent(prefix: string, invoiceId: number, roomName: string): string {
+export function paymentContent(prefix: string, roomName: string, period: string): string {
+  const [y, m] = period.split("-");
   const name = compact(roomName);
-  return `${prefix.toUpperCase()}${invoiceId}${name ? " " + name : ""}`;
+  return [prefix.toUpperCase(), name, `${m}/${y}`].filter(Boolean).join("_");
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Tìm phòng và tháng trong nội dung chuyển khoản dạng "<TIỀN TỐ>_<TÊN PHÒNG>_<MM>/<YYYY>".
+ * Bỏ hết ký tự không phải chữ/số trước khi so, nên vẫn khớp khi ngân hàng bỏ "_", "/" hoặc khoảng trắng.
+ * Trả về null nếu không thấy.
+ */
+export function parsePaymentRef(
+  prefix: string,
+  content: string,
+  rooms: { id: number; name: string }[],
+): { roomId: number; period: string } | null {
+  if (!isValidPrefix(prefix)) return null;
+  const text = compact(content);
+  for (const r of rooms) {
+    const name = compact(r.name);
+    if (!name) continue;
+    const re = new RegExp(`${escapeRe(compact(prefix))}${escapeRe(name)}(\\d{2})(20\\d{2})(?!\\d)`);
+    const m = re.exec(text);
+    if (!m) continue;
+    const month = Number(m[1]);
+    if (month < 1 || month > 12) continue;
+    return { roomId: r.id, period: `${m[2]}-${m[1]}` };
+  }
+  return null;
+}
 
 /**
  * Lấy mã hóa đơn từ giao dịch SePay. Ưu tiên trường `code` (SePay tự trích theo cấu hình),

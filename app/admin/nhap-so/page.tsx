@@ -4,7 +4,6 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
 import { FeeTypes } from "@/components/FeeTypes";
 import { ReadingForm } from "@/components/ReadingForm";
-import { SendLink } from "@/components/SendLink";
 import { FEE_METHOD_LABEL, computeInvoice } from "@/lib/billing";
 import {
   currentPeriod,
@@ -419,14 +418,7 @@ export default async function EnterReadings({
         <div className="grid grid-cols-2 gap-2">
           {published ? (
             <>
-              <SendLink
-                compact
-                fill
-                path={`/p/${selected.token}`}
-                phone={selected.tenant_phone.replace(/\D/g, "")}
-                message={`Chào ${selected.tenant_name || "bạn"}, hóa đơn ${selected.name} tháng ${periodLabel(period)} là ${moneyD(res.total)}. Xem chi tiết tại: {link}`}
-              />
-              <form action={unpublishRoomAction}>
+              <form action={unpublishRoomAction} className="col-span-2">
                 <input type="hidden" name="room" value={selected.id} />
                 <input type="hidden" name="period" value={period} />
                 <input type="hidden" name="back" value={back} />

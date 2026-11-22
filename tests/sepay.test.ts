@@ -1,10 +1,26 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { paymentContent, parsePaymentCode, parsePayload, sepayQrUrl, isValidPrefix } from "@/lib/sepay";
+import { paymentContent, parsePaymentCode, parsePaymentRef, parsePayload, sepayQrUrl, isValidPrefix } from "@/lib/sepay";
 
 describe("mã thanh toán và QR", () => {
-  it("nội dung chuyển khoản có mã hóa đơn và tên phòng không dấu", () => {
-    expect(paymentContent("tro", 123, "Phòng 3")).toBe("TRO123 PHONG3");
-    expect(paymentContent("TRO", 7, "")).toBe("TRO7");
+  it("nội dung chuyển khoản dạng TIỀNTỐ_TÊNPHÒNG_MM/YYYY, tên phòng không dấu", () => {
+    expect(paymentContent("tro", "Phòng 3", "2026-11")).toBe("TRO_PHONG3_11/2026");
+    expect(paymentContent("DETRO", "Phòng 1", "2027-01")).toBe("DETRO_PHONG1_01/2027");
+    expect(paymentContent("TRO", "", "2026-01")).toBe("TRO_01/2026");
+  });
+
+  it("tìm phòng và tháng từ nội dung, kể cả khi ngân hàng bỏ _ / hoặc khoảng trắng", () => {
+    const rooms = [
+      { id: 1, name: "Phòng 1" },
+      { id: 11, name: "Phòng 11" },
+    ];
+    expect(parsePaymentRef("DETRO", "DETRO_PHONG1_11/2026", rooms)).toEqual({ roomId: 1, period: "2026-11" });
+    expect(parsePaymentRef("DETRO", "MBVCB.99 DETRO PHONG1 11 2026", rooms)).toEqual({ roomId: 1, period: "2026-11" });
+    expect(parsePaymentRef("DETRO", "DETROPHONG1112026", rooms)).toEqual({ roomId: 1, period: "2026-11" });
+    expect(parsePaymentRef("DETRO", "DETRO_PHONG11_11/2026", rooms)).toEqual({ roomId: 11, period: "2026-11" });
+    expect(parsePaymentRef("DETRO", "DETRO_PHONG1_12/2026", rooms)).toEqual({ roomId: 1, period: "2026-12" });
+    expect(parsePaymentRef("DETRO", "DETRO_PHONG1_13/2026", rooms)).toBeNull(); // tháng sai
+    expect(parsePaymentRef("DETRO", "DETRO1 PHONG1", rooms)).toBeNull(); // mã hóa đơn kiểu cũ không khớp kiểu mới
+    expect(parsePaymentRef("T.O", "TXO_PHONG1_11/2026", rooms)).toBeNull();
   });
 
   it("lấy mã hóa đơn từ code hoặc từ nội dung, kể cả khi ngân hàng bỏ khoảng trắng", () => {
@@ -139,6 +155,19 @@ describe("webhook /api/sepay với database thật", () => {
     expect((await Q.getInvoiceById(inv2.id))!.paid_at).toBe("2026-11-22");
     const recent = await Q.listRecentPayments(1);
     expect(recent[0].note).toMatch(/đã đủ tiền/);
+  });
+
+  it("nội dung mới TIỀNTỐ_PHÒNG_MM/YYYY tự khớp theo phòng và tháng, kể cả khi ngân hàng bỏ ký tự đặc biệt", async () => {
+    const [room] = await Q.listRooms();
+    await Q.saveReading(room.id, "2027-02", "elec", 300, 400);
+    await Q.saveReading(room.id, "2027-02", "water", 6, 8);
+    await Q.publishInvoice(room.id, "2027-02");
+    const inv4 = (await Q.getInvoice(room.id, "2027-02"))!;
+    const t4 = Q.invoiceResult(inv4).total;
+    const content = paymentContent("TRO", room.name, "2027-02");
+    expect(content).toMatch(/^TRO_.+_02\/2027$/);
+    await call(tx({ id: 61, content: content.replace(/[_/]/g, ""), transferAmount: t4 }));
+    expect((await Q.getInvoiceById(inv4.id))!.paid_at).toBe("2026-11-22");
   });
 
   it("tiền về trước khi công bố: tự đánh dấu đã thu ngay khi công bố", async () => {
