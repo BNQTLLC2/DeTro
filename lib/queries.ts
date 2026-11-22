@@ -321,7 +321,12 @@ export async function updateFeeType(
   ]);
 }
 
+/** Khoản mặc định, luôn giữ lại (chỉ tắt cho phòng nào không dùng). */
+const PROTECTED_FEE = "Tiền rác";
+
 export async function deleteFeeType(id: number): Promise<void> {
+  const rows = await q("select name from fee_types where id = $1", [id]);
+  if (rows[0]?.name === PROTECTED_FEE) throw new Error(`${PROTECTED_FEE} là khoản mặc định, không xóa được. Bỏ chọn nếu phòng không dùng.`);
   await q("delete from fee_types where id = $1", [id]);
 }
 

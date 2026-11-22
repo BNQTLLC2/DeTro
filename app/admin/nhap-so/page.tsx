@@ -26,7 +26,7 @@ import {
   readingDefaults,
 } from "@/lib/queries";
 import {
-  addAdjustmentAction,
+  deleteFeeTypeAction,
   publishRoomAction,
   removeAdjustmentAction,
   saveFeesAction,
@@ -248,18 +248,31 @@ export default async function EnterReadings({
               key={`${f.id}-${f.enabled}-${f.room_amount}-${f.quantity}`}
               className="flex flex-col gap-2 border-t border-line pt-3"
             >
-              <label className="flex min-h-11 items-center gap-3">
-                <input
-                  type="checkbox"
-                  name={`fee_on_${f.id}`}
-                  defaultChecked={f.enabled}
-                  className="size-5"
-                />
-                <span className="font-medium">{f.name}</span>
-                <span className="ml-auto text-xs text-muted">
-                  {FEE_METHOD_LABEL[f.method]}
-                </span>
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="flex min-h-11 flex-1 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name={`fee_on_${f.id}`}
+                    defaultChecked={f.enabled}
+                    className="size-5"
+                  />
+                  <span className="font-medium">{f.name}</span>
+                  <span className="ml-auto text-xs text-muted">
+                    {FEE_METHOD_LABEL[f.method]}
+                  </span>
+                </label>
+                {f.name !== "Tiền rác" ? (
+                  <ConfirmButton
+                    message={`Xóa "${f.name}" khỏi tất cả các phòng? Hóa đơn đã công bố không bị ảnh hưởng.`}
+                    className="btn-ghost !min-h-9 shrink-0 !px-3 text-sm"
+                    formAction={deleteFeeTypeAction}
+                    name="id"
+                    value={f.id}
+                  >
+                    Xóa
+                  </ConfirmButton>
+                ) : null}
+              </div>
               <div
                 className={
                   f.method === "per_unit" ? "grid grid-cols-2 gap-3" : ""
@@ -301,27 +314,9 @@ export default async function EnterReadings({
             </button>
           ) : null}
         </form>
-      </section>
-
-      <FeeTypes roomId={selected.id} back={back} period={period} />
-
-      <details className="card my-3" open={(inv?.adjustments.length ?? 0) > 0}>
-        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between">
-          <span className="text-base font-bold">
-            Khoản phát sinh
-            {inv && inv.adjustments.length > 0 ? (
-              <span className="chip ml-2 bg-warn-bg text-warn">
-                {inv.adjustments.length}
-              </span>
-            ) : null}
-          </span>
-          <span className="text-sm text-accent">Thêm / xem</span>
-        </summary>
-        <div className="mt-3 flex flex-col gap-3">
-          <p className="text-sm text-muted">
-            Sửa chữa, đền bù, giảm trừ... Nhập số âm để giảm trừ.
-          </p>
-          {inv && inv.adjustments.length > 0 ? (
+        {inv && inv.adjustments.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3">
+            <h4 className="font-semibold">Chỉ tháng này</h4>
             <ul className="flex flex-col divide-y divide-line">
               {inv.adjustments.map((a, idx) => (
                 <li
@@ -337,48 +332,22 @@ export default async function EnterReadings({
                       <input type="hidden" name="back" value={back} />
                       <input type="hidden" name="index" value={idx} />
                       <ConfirmButton
-                        message="Bỏ khoản phát sinh này?"
-                        className="btn-ghost"
+                        message="Bỏ khoản này?"
+                        className="btn-ghost !min-h-9 !px-3 text-sm"
                       >
-                        Bỏ
+                        Xóa
                       </ConfirmButton>
                     </form>
                   </span>
                 </li>
               ))}
             </ul>
-          ) : null}
-          <form
-            action={addAdjustmentAction}
-            className="grid grid-cols-[1fr_8rem] gap-2"
-          >
-            <input type="hidden" name="room" value={selected.id} />
-            <input type="hidden" name="period" value={period} />
-            <input type="hidden" name="back" value={back} />
-            <div>
-              <label htmlFor="adj-name" className="label">
-                Tên khoản
-              </label>
-              <input
-                id="adj-name"
-                name="name"
-                required
-                className="input"
-                placeholder="Sửa vòi nước"
-              />
-            </div>
-            <div>
-              <label htmlFor="adj-amount" className="label">
-                Số tiền
-              </label>
-              <MoneyInput id="adj-amount" name="amount" required allowNegative placeholder="120,000" />
-            </div>
-            <button type="submit" className="btn-ghost col-span-2">
-              Thêm khoản
-            </button>
-          </form>
-        </div>
-      </details>
+          </div>
+        ) : null}
+      </section>
+
+      <FeeTypes roomId={selected.id} back={back} period={period} />
+      <div className="mb-3" />
 
       <section className="card flex flex-col gap-2">
         <h3 className="text-base font-bold">

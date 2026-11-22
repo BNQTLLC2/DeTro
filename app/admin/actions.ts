@@ -287,7 +287,10 @@ export async function updateFeeTypeAction(fd: FormData) {
 export async function deleteFeeTypeAction(fd: FormData) {
   await requireAdmin();
   const id = intOf(fd, "id");
-  await run(safeBack(fd, "/admin/phong"), "Đã xóa loại phí. Hóa đơn cũ không bị ảnh hưởng.", async () => {
+  const roomId = intOf(fd, "room");
+  const period = str(fd, "period");
+  await run(safeBack(fd, "/admin/phong"), "Đã xóa loại phí khỏi tất cả các phòng. Hóa đơn đã công bố không bị ảnh hưởng.", async () => {
     await Q.deleteFeeType(id);
+    if (roomId && isPeriod(period)) await Q.refreshInvoiceFees(roomId, period);
   });
 }
