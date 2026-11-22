@@ -37,7 +37,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const n1 = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+// Số thập phân kiểu Việt Nam: 112318,5 -> "112.318,5"
+const n1 = (n: number) => {
+  const [int, dec] = String(Math.round(n * 100) / 100).split(".");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return dec ? `${grouped},${dec}` : grouped;
+};
 
 export default async function TenantPage({
   params,
@@ -147,7 +152,7 @@ export default async function TenantPage({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
+    <main className="mx-auto flex w-full min-w-0 max-w-md flex-col gap-4 overflow-x-clip px-4 py-6">
       {[rentPay, otherPay].map((p) =>
         p && !p.qrReady ? (
           <PaymentWatcher key={p.part} token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} />
@@ -254,13 +259,12 @@ export default async function TenantPage({
         <section className="card flex flex-col gap-4">
           <SectionHead
             title="Tiền điện"
-            hint="Dùng càng nhiều điện, tiền càng cao"
             amount={res.elecAmount}
             color="c-elec"
             d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"
           />
           <MeterBox
-            label="Công tơ điện ở phòng bạn đã chạy từ số này đến số kia:"
+            label="Chỉ số công tơ điện"
             from={inv.elec_start}
             to={inv.elec_end}
           />
@@ -295,13 +299,12 @@ export default async function TenantPage({
         <section className="card flex flex-col gap-4">
           <SectionHead
             title="Tiền nước"
-            hint="Nước dùng ít thì giá rẻ, dùng nhiều thì giá cao hơn"
             amount={res.waterAmount}
             color="c-water"
             d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
           />
           <MeterBox
-            label="Đồng hồ nước ở phòng bạn đã chạy từ số này đến số kia:"
+            label="Chỉ số đồng hồ nước"
             from={inv.water_start}
             to={inv.water_end}
           />
@@ -496,13 +499,11 @@ function CollectCard({
 
 function SectionHead({
   title,
-  hint,
   amount,
   color,
   d,
 }: {
   title: string;
-  hint: string;
   amount: number;
   color: "c-elec" | "c-water";
   d: string;
@@ -518,11 +519,8 @@ function SectionHead({
           <path d={d} />
         </svg>
       </span>
-      <div className="flex-1">
-        <h2 className="text-lg font-bold">{title}</h2>
-        <p className="text-sm text-muted">{hint}</p>
-      </div>
-      <p className="text-lg font-bold">{moneyD(amount)}</p>
+      <h2 className="min-w-0 flex-1 text-lg font-bold">{title}</h2>
+      <p className="shrink-0 whitespace-nowrap text-lg font-bold">{moneyD(amount)}</p>
     </div>
   );
 }
@@ -564,14 +562,14 @@ function Compare({
   const max = Math.max(cur.value, prev?.value ?? 0, 1);
   const row = (r: { label: string; value: number }, strong: boolean) => (
     <div className="flex items-center gap-2.5">
-      <span className={`w-[4.5rem] shrink-0 text-sm ${strong ? "font-semibold" : "text-muted"}`}>{r.label}</span>
-      <div className="h-[22px] flex-1 rounded-md bg-line">
+      <span className={`w-[4.5rem] shrink-0 whitespace-nowrap text-sm ${strong ? "font-semibold" : "text-muted"}`}>{r.label}</span>
+      <div className="h-[22px] min-w-0 flex-1 rounded-md bg-line">
         <div
           className={`h-[22px] rounded-md ${colorClass} ${strong ? "" : "opacity-50"}`}
           style={{ width: `${Math.round((r.value / max) * 100)}%` }}
         />
       </div>
-      <span className={`w-10 shrink-0 text-right text-sm ${strong ? "font-bold" : "font-semibold"}`}>{n1(r.value)}</span>
+      <span className={`min-w-[4.5rem] shrink-0 whitespace-nowrap text-right text-sm ${strong ? "font-bold" : "font-semibold"}`}>{n1(r.value)}</span>
     </div>
   );
   return (
