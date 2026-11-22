@@ -39,6 +39,30 @@ function statusOf(room: Room, inv: Invoice | undefined): Status {
   return inv.paid_at ? "paid" : "unpaid";
 }
 
+const TILE: Record<Status, { label: string; cls: string }> = {
+  vacant: { label: "Trống", cls: "border-dashed border-line text-muted" },
+  pending: {
+    label: "Chưa nhập số",
+    cls: "border-transparent bg-idle-bg text-muted",
+  },
+  draft: {
+    label: "Chờ công bố",
+    cls: "border-transparent bg-warn-bg text-warn",
+  },
+  unpaid: { label: "Chưa thu", cls: "border-transparent bg-bad-bg text-bad" },
+  paid: { label: "Đã thu", cls: "border-transparent bg-ok-bg text-ok" },
+};
+
+/** 3.424.500 -> "3,42tr"; 425.000 -> "425k" */
+function moneyShort(n: number): string {
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000)
+      .toFixed(2)
+      .replace(/\.?0+$/, "")
+      .replace(".", ",")}tr`;
+  return `${Math.round(n / 1000)}k`;
+}
+
 const CHIP: Record<Status, { label: string; cls: string; bar: string }> = {
   vacant: {
     label: "Phòng trống",
@@ -97,6 +121,9 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
     if (!room.is_vacant) liveCount++;
     return { room, inv, status, res, total };
   });
+  const todo = rows.filter(
+    (r) => r.status === "draft" || r.status === "unpaid",
+  );
   const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
   const pct = expected > 0 ? Math.round((collected / expected) * 100) : 0;
 
@@ -124,17 +151,9 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
       {/* Tổng kết tiền */}
       <section className="card flex flex-col gap-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-muted">Đã thu</p>
-            <p className="text-3xl font-bold text-ok">{moneyD(collected)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-muted">Còn thiếu</p>
-            <p className="text-xl font-bold text-bad">
-              {moneyD(expected - collected)}
-            </p>
-          </div>
+        <div>
+          <p className="text-sm font-medium text-muted">Đã thu</p>
+          <p className="text-3xl font-bold text-ok">{moneyD(collected)}</p>
         </div>
         <div
           className="h-3 overflow-hidden rounded-full bg-line"
@@ -146,9 +165,18 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
             style={{ width: `${pct}%` }}
           />
         </div>
-        <p className="text-sm text-muted">
-          {pct}% của tổng {moneyD(expected)} · {liveCount} phòng đang ở
-        </p>
+        <dl className="flex flex-col gap-1 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted">Còn thiếu</dt>
+            <dd className="font-bold text-bad">
+              {moneyD(expected - collected)}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted">Tổng tháng này ({pct}% đã thu)</dt>
+            <dd className="font-semibold">{moneyD(expected)}</dd>
+          </div>
+        </dl>
       </section>
 
       {/* Việc cần làm tiếp theo */}
@@ -187,84 +215,83 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         </section>
       ) : null}
 
-      {/* Danh sách phòng */}
-      <ul className="flex flex-col gap-3">
-        {rows.map(({ room, inv, status, res, total }) => {
-          const chip = CHIP[status];
-          const published = status === "unpaid" || status === "paid";
-          const got = inv ? (received.get(inv.id) ?? 0) : 0;
-          const hidden = { room: room.id, period, back };
-          if (status === "pending") {
-            // Phòng chưa nhập đủ số: một dòng gọn, bấm vào để nhập (tránh lặp nút giống nhau ở mọi phòng).
+      {/* Sơ đồ các phòng: nhìn một lần biết phòng nào đang ở trạng thái nào */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold">Các phòng</h2>
+        <ul className="grid grid-cols-3 gap-2">
+          {rows.map(({ room, status, total }) => {
+            const t = TILE[status];
             return (
               <li key={room.id}>
                 <Link
                   href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                  className={`card flex items-center justify-between gap-3 border-l-8 py-3 no-underline ${chip.bar}`}
+                  aria-label={`${room.name}: ${CHIP[status].label}`}
+                  className={`flex min-h-[7rem] flex-col items-center justify-center gap-1 rounded-2xl border-2 p-2 text-center no-underline ${t.cls}`}
                 >
-                  <span className="min-w-0">
-                    <span className="block text-lg font-bold">{room.name}</span>
-                    <span className="block truncate text-sm text-muted">
-                      {room.tenant_name || "Chưa nhập tên"} · {room.occupants}{" "}
-                      người
-                    </span>
+                  <span className="text-3xl font-bold leading-none">
+                    {room.name.replace(/^Phòng\s*/i, "")}
                   </span>
-                  <span className="flex shrink-0 items-center gap-3 text-sm font-medium">
-                    <span
-                      className={
-                        res?.elecState === "ok" ? "text-ok" : "text-muted"
-                      }
-                    >
-                      ⚡ {res?.elecState === "ok" ? "✓" : "○"}
-                    </span>
-                    <span
-                      className={
-                        res?.waterState === "ok" ? "text-ok" : "text-muted"
-                      }
-                    >
-                      💧 {res?.waterState === "ok" ? "✓" : "○"}
-                    </span>
-                    <span className="text-xl text-accent" aria-hidden="true">
-                      ›
-                    </span>
+                  <span className="text-sm font-semibold leading-tight">
+                    {t.label}
+                  </span>
+                  <span className="text-sm leading-tight">
+                    {total !== null
+                      ? moneyShort(total)
+                      : room.is_vacant
+                        ? ""
+                        : "—"}
                   </span>
                 </Link>
               </li>
             );
-          }
-          return (
-            <li
-              key={room.id}
-              className={`card border-l-8 ${chip.bar} flex flex-col gap-3 ${status === "vacant" ? "opacity-70" : ""}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-lg font-bold">{room.name}</p>
-                  <p className="truncate text-sm text-muted">
-                    {room.is_vacant
-                      ? "Chưa có người thuê"
-                      : `${room.tenant_name || "Chưa nhập tên"} · ${room.occupants} người`}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <p className="text-lg font-bold">
-                    {total !== null ? moneyD(total) : "—"}
-                  </p>
-                  <span className={`chip ${chip.cls}`}>{chip.label}</span>
-                </div>
-              </div>
+          })}
+        </ul>
+        <p className="text-xs text-muted">
+          Bấm vào một phòng để nhập số, công bố hoặc xem chi tiết.
+        </p>
+      </section>
 
-              {got > 0 ? (
-                <p className="text-sm font-medium text-ok">
-                  Đã nhận qua SePay {moneyD(got)}
-                  {total !== null && got < total
-                    ? `, còn thiếu ${moneyD(total - got)}`
-                    : ""}
-                </p>
-              ) : null}
-
-              {!room.is_vacant ? (
-                <div className="flex flex-col gap-2 border-t border-line pt-3">
+      {/* Việc cần xử lý */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold">Cần xử lý</h2>
+        {todo.length === 0 ? (
+          <p className="card text-center text-muted">
+            ✓ Không có việc nào cần làm lúc này.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {todo.map(({ room, inv, status, total }) => {
+              const got = inv ? (received.get(inv.id) ?? 0) : 0;
+              const hidden = { room: room.id, period, back };
+              return (
+                <li
+                  key={room.id}
+                  className={`card flex flex-col gap-3 border-l-8 ${CHIP[status].bar}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold">{room.name}</p>
+                      <p className="truncate text-sm text-muted">
+                        {room.tenant_name || "Chưa nhập tên"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <p className="text-lg font-bold">
+                        {total !== null ? moneyD(total) : "—"}
+                      </p>
+                      <span className={`chip ${CHIP[status].cls}`}>
+                        {CHIP[status].label}
+                      </span>
+                    </div>
+                  </div>
+                  {got > 0 ? (
+                    <p className="text-sm font-medium text-ok">
+                      Đã nhận qua SePay {moneyD(got)}
+                      {total !== null && got < total
+                        ? `, còn thiếu ${moneyD(total - got)}`
+                        : ""}
+                    </p>
+                  ) : null}
                   {status === "draft" ? (
                     <form action={publishRoomAction}>
                       <Hidden {...hidden} />
@@ -272,71 +299,30 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                         Công bố cho người thuê
                       </button>
                     </form>
-                  ) : null}
-                  {status === "unpaid" ? (
-                    <form action={setPaidAction}>
-                      <Hidden {...hidden} />
-                      <input type="hidden" name="paid" value="1" />
-                      <button type="submit" className="btn-primary w-full">
-                        Đánh dấu đã thu
-                      </button>
-                    </form>
-                  ) : null}
-
-                  <details className="group">
-                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-medium text-accent">
-                      <span>Thêm thao tác</span>
-                      <span
-                        className="transition-transform group-open:rotate-180"
-                        aria-hidden="true"
-                      >
-                        ▾
-                      </span>
-                    </summary>
-                    <div className="mt-2 flex flex-col gap-2">
-                      <Link
-                        href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                        className="btn-ghost"
-                      >
-                        Xem / sửa số điện nước
-                      </Link>
-                      {published ? (
-                        <>
-                          {status === "paid" ? (
-                            <form action={setPaidAction}>
-                              <Hidden {...hidden} />
-                              <input type="hidden" name="paid" value="0" />
-                              <button
-                                type="submit"
-                                className="btn-ghost w-full"
-                              >
-                                Bỏ đánh dấu đã thu
-                              </button>
-                            </form>
-                          ) : null}
-                          <form action={unpublishRoomAction}>
-                            <Hidden {...hidden} />
-                            <button type="submit" className="btn-ghost w-full">
-                              Hủy công bố
-                            </button>
-                          </form>
-                        </>
-                      ) : null}
-                      {published && inv && total !== null ? (
+                  ) : (
+                    <>
+                      <form action={setPaidAction}>
+                        <Hidden {...hidden} />
+                        <input type="hidden" name="paid" value="1" />
+                        <button type="submit" className="btn-primary w-full">
+                          Đánh dấu đã thu
+                        </button>
+                      </form>
+                      {inv && total !== null ? (
                         <SendLink
                           path={`/p/${room.token}`}
                           phone={room.tenant_phone.replace(/\D/g, "")}
                           message={`Chào ${room.tenant_name || "bạn"}, hóa đơn ${room.name} tháng ${periodLabel(period)} là ${moneyD(total)}. Xem chi tiết tại: {link}`}
                         />
                       ) : null}
-                    </div>
-                  </details>
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* Giao dịch SePay */}
       {recent.length > 0 ? (
