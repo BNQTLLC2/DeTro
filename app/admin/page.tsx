@@ -487,7 +487,6 @@ function RoomTile({
         : action === "pay"
           ? `Chờ thu ${moneyD(remaining)}`
           : "Đã thu đủ";
-  const actionIcon = { read: "✎", pub: "➤", pay: "₫", done: "✓" }[action];
   const showBar = sum.merged && !sum.allPaid && collected > 0 && sum.total > 0;
   const pct = sum.total > 0 ? Math.min(Math.round((collected / sum.total) * 100), 100) : 0;
 
@@ -555,7 +554,6 @@ function RoomTile({
         </div>
 
         <div className={`flex items-center gap-2 px-4 py-2.5 text-[15px] font-semibold ${ACTION_TONE[action]}`}>
-          <span aria-hidden="true">{actionIcon}</span>
           <span>{actionLabel}</span>
           <span className={`ml-auto transition-transform ${selected ? "rotate-90" : ""}`} aria-hidden="true">
             ›
