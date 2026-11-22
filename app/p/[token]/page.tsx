@@ -128,7 +128,7 @@ export default async function TenantPage({
                 key={i.period}
                 href={`/p/${token}?m=${i.period}`}
                 aria-current={active ? "page" : undefined}
-                className={`flex h-14 min-w-[92px] shrink-0 flex-col justify-center rounded-xl border px-3 no-underline ${
+                className={`flex min-h-14 min-w-[92px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
                   active ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"
                 }`}
               >
@@ -477,7 +477,7 @@ function Compare({
   const max = Math.max(cur.value, prev?.value ?? 0, 1);
   const row = (r: { label: string; value: number }, strong: boolean) => (
     <div className="flex items-center gap-2.5">
-      <span className={`w-[70px] shrink-0 text-sm ${strong ? "font-semibold" : "text-muted"}`}>{r.label}</span>
+      <span className={`w-[4.5rem] shrink-0 text-sm ${strong ? "font-semibold" : "text-muted"}`}>{r.label}</span>
       <div className="h-[22px] flex-1 rounded-md bg-line">
         <div
           className={`h-[22px] rounded-md ${colorClass} ${strong ? "" : "opacity-50"}`}
@@ -521,12 +521,12 @@ function Chart({
       <p className="font-semibold">{title}</p>
       <div
         className="relative flex items-end gap-2"
-        style={{ height: H + 40 }}
+        style={{ height: `calc(${H}px + 2.5rem)` }}
         role="img"
         aria-label={`${title}: ${data.map((d) => `${periodLabel(d.key)} ${d.text}`).join(", ")}`}
       >
         {data.map((d) => (
-          <div key={d.key} aria-hidden="true" className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" style={{ height: H + 40 }}>
+          <div key={d.key} aria-hidden="true" className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" style={{ height: `calc(${H}px + 2.5rem)` }}>
             <span className="text-xs font-semibold leading-4">{d.text}</span>
             <div
               className={`w-full max-w-[34px] rounded-t-md ${colorClass} ${d.key === selected ? "" : "opacity-45"}`}
@@ -539,7 +539,7 @@ function Chart({
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-c-high"
-            style={{ bottom: 20 + Math.round((line / max) * H) }}
+            style={{ bottom: `calc(1.25rem + ${Math.round((line / max) * H)}px)` }}
           />
         ) : null}
       </div>

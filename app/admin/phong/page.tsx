@@ -47,11 +47,11 @@ export default async function RoomsPage({
               ) : (
                 <div className="min-w-0">
                   <p
-                    className={`truncate font-medium ${r.tenant_name ? "" : "text-muted"}`}
+                    className={`break-words font-medium ${r.tenant_name ? "" : "text-muted"}`}
                   >
                     {r.tenant_name || "Chưa nhập tên người thuê"}
                   </p>
-                  <p className="truncate text-sm text-muted">
+                  <p className="break-words text-sm text-muted">
                     {r.tenant_phone || "Chưa có số điện thoại"}
                   </p>
                 </div>
@@ -101,7 +101,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="truncate text-sm font-semibold">{value}</dd>
+      <dd className="break-words text-sm font-semibold">{value}</dd>
     </div>
   );
 }

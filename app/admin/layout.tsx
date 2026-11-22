@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted">Quản lý phòng trọ</p>
-          <p className="truncate text-lg font-bold">{settings.house_name}</p>
+          <p className="break-words text-lg font-bold">{settings.house_name}</p>
         </div>
         <div className="flex items-center gap-2">
           <FontSizeToggle />

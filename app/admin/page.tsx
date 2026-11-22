@@ -245,20 +245,20 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{room.name}</span>
-                  <span className="block truncate text-sm text-muted">
+                  <span className="block break-words text-sm text-muted">
                     {room.is_vacant
                       ? "Chưa có người thuê"
                       : room.tenant_name || "Chưa nhập tên"}
-                  </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block font-bold">
-                    {total !== null ? moneyD(total) : ""}
                   </span>
                   <span className={`block text-sm font-semibold ${s.text}`}>
                     {s.label}
                   </span>
                 </span>
+                {total !== null ? (
+                  <span className="shrink-0 whitespace-nowrap text-right font-bold">
+                    {moneyD(total)}
+                  </span>
+                ) : null}
               </>
             );
 
@@ -400,7 +400,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
             {recent.map((p) => (
               <li key={p.id} className="flex flex-col gap-0.5 py-3">
                 <div className="flex justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm">
+                  <span className="min-w-0 break-words text-sm">
                     {p.tx_date.slice(5, 16)} ·{" "}
                     {p.content || "(không có nội dung)"}
                   </span>
