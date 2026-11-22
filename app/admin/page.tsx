@@ -237,9 +237,9 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
       <section className="flex flex-wrap gap-2">
         {(
           [
-            ["pending", "Nhập số", "✎", "bg-warn-bg text-warn"],
-            ["draft", "Công bố", "➤", "bg-accent-soft text-accent"],
-            ["unpaid", "Thu tiền", "₫", "bg-ok-bg text-ok"],
+            ["pending", "Chờ nhập số", "✎", "bg-warn-bg text-warn"],
+            ["draft", "Chờ công bố", "➤", "bg-accent-soft text-accent"],
+            ["unpaid", "Chờ thu tiền", "₫", "bg-ok-bg text-ok"],
           ] as const
         ).map(([k, label, icon, tone]) => (
           <Link
