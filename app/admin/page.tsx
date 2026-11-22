@@ -579,12 +579,12 @@ function RoomItem({
     return (
       <li className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3">
         <span
-          className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${ST.vacant.badge}`}
+          className={`hidden size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold sm:flex ${ST.vacant.badge}`}
         >
           {room.name.replace(/^Phòng\s*/i, "")}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-bold">{roomLabel(room.name)}</span>
+          <span className="block whitespace-nowrap font-bold">{roomLabel(room.name)}</span>
           <span className="block text-sm text-muted">Chưa có người thuê</span>
         </span>
       </li>
@@ -605,14 +605,14 @@ function RoomItem({
   return (
     <li>
       <details className="group" open={open}>
-        <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 [&::-webkit-details-marker]:hidden">
           <span
-            className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${s.badge}`}
+            className={`hidden size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold sm:flex ${s.badge}`}
           >
             {room.name.replace(/^Phòng\s*/i, "")}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-bold">{roomLabel(room.name)}</span>
+            <span className="block whitespace-nowrap font-bold">{roomLabel(room.name)}</span>
             <span className="block break-words text-sm text-muted">
               {room.tenant_name || "Chưa nhập tên"}
             </span>
