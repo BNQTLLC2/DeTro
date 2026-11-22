@@ -327,7 +327,8 @@ const PROTECTED_FEE = "Tiền rác";
 export async function deleteFeeType(id: number): Promise<void> {
   const rows = await q("select name from fee_types where id = $1", [id]);
   if (rows[0]?.name === PROTECTED_FEE) throw new Error(`${PROTECTED_FEE} là khoản mặc định, không xóa được. Bỏ chọn nếu phòng không dùng.`);
-  await q("delete from fee_types where id = $1", [id]);
+  const gone = await q("delete from fee_types where id = $1 returning id", [id]);
+  if (gone.length === 0) throw new Error("Không tìm thấy loại phí để xóa. Tải lại trang rồi thử lại.");
 }
 
 export async function getRoomFeeRows(roomId: number): Promise<RoomFeeRow[]> {
