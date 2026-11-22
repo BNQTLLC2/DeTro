@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MoneyInput } from "@/components/MoneyInput";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
 import { TokenPanel } from "@/components/TokenPanel";
 import { first, type SP } from "@/lib/params";
 import { getRoom } from "@/lib/queries";
-import { deleteRoomAction, saveRoomAction } from "../../actions";
+import { saveRoomAction } from "../../actions";
 
 export const metadata = { title: "Chi tiết phòng" };
 
@@ -130,16 +129,6 @@ export default async function RoomPage({
           phòng hoặc đổi người, hãy tạo lại link.
         </p>
       </section>
-
-      <form action={deleteRoomAction} className="card">
-        <input type="hidden" name="id" value={r.id} />
-        <ConfirmButton
-          message={`Xóa ${r.name} và toàn bộ hóa đơn của phòng này? Không khôi phục được.`}
-          className="btn-danger"
-        >
-          Xóa phòng
-        </ConfirmButton>
-      </form>
     </main>
   );
 }

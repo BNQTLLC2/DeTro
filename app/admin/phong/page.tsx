@@ -3,7 +3,6 @@ import { Flash } from "@/components/Flash";
 import { moneyD } from "@/lib/format";
 import { first, type SP } from "@/lib/params";
 import { listRooms } from "@/lib/queries";
-import { createRoomAction } from "../actions";
 
 export const metadata = { title: "Quản lý phòng" };
 
@@ -72,27 +71,6 @@ export default async function RoomsPage({
           </li>
         ))}
       </ul>
-
-      <form
-        action={createRoomAction}
-        className="card flex flex-wrap items-end gap-2"
-      >
-        <div className="min-w-0 flex-1">
-          <label htmlFor="new-room" className="label">
-            Thêm phòng mới
-          </label>
-          <input
-            id="new-room"
-            name="name"
-            required
-            placeholder={`Phòng ${rooms.length + 1}`}
-            className="input"
-          />
-        </div>
-        <button type="submit" className="btn-primary">
-          Thêm
-        </button>
-      </form>
     </main>
   );
 }

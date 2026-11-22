@@ -236,10 +236,6 @@ export async function createRoom(name: string): Promise<number> {
   return id;
 }
 
-export async function deleteRoom(id: number): Promise<void> {
-  await q("delete from rooms where id = $1", [id]);
-}
-
 /** Đổi link của phòng: link cũ không còn xem được. */
 export async function regenerateToken(id: number): Promise<void> {
   await q(`update rooms set token = ${TOKEN_SQL} where id = $1`, [id]);

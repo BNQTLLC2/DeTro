@@ -182,23 +182,6 @@ export async function saveFeesAction(fd: FormData) {
   });
 }
 
-export async function createRoomAction(fd: FormData) {
-  await requireAdmin();
-  const name = str(fd, "name");
-  await run("/admin/phong", "Đã thêm phòng mới.", async () => {
-    if (!name) throw new Error("Hãy nhập tên phòng.");
-    await Q.createRoom(name);
-  });
-}
-
-export async function deleteRoomAction(fd: FormData) {
-  await requireAdmin();
-  const id = intOf(fd, "id");
-  await run("/admin/phong", "Đã xóa phòng và toàn bộ hóa đơn của phòng.", async () => {
-    await Q.deleteRoom(id);
-  });
-}
-
 export async function regenerateTokenAction(fd: FormData) {
   await requireAdmin();
   const id = intOf(fd, "id");
