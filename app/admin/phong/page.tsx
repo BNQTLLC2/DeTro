@@ -40,7 +40,7 @@ export default async function RoomsPage() {
                 </span>
                 <span className="h-px flex-1 bg-line" />
               </div>
-              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+              <ul className="grid grid-cols-3 gap-2 sm:gap-3">
                 {f.rooms.map((r) => (
                   <li key={r.id}>
                     <Link
@@ -50,7 +50,10 @@ export default async function RoomsPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-lg font-bold leading-tight">{`Phòng ${r.name.trim().replace(/^Phòng\s*/i, "")}`}</span>
+                        <span className="flex flex-col">
+                          <span className="text-xs leading-none text-muted">Phòng</span>
+                          <span className="text-2xl font-bold leading-tight">{r.name.trim().replace(/^Phòng\s*/i, "")}</span>
+                        </span>
                         <span
                           className={`size-2.5 shrink-0 rounded-full ${r.is_vacant ? "bg-warn" : "bg-ok"}`}
                           aria-label={r.is_vacant ? "Trống" : "Đang thuê"}

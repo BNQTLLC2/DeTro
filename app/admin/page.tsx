@@ -42,6 +42,7 @@ const CANCEL = `${BTN_2ND} border-bad/40 text-bad hover:bg-bad-bg`;
 const NEUTRAL = `${BTN_2ND} border-line text-ink hover:bg-idle-bg`;
 
 /** Tên hiển thị: luôn có chữ "Phòng" ở đầu (101 -> Phòng 101), tránh lặp nếu tên đã có sẵn. */
+const num = (name: string) => name.trim().replace(/^Phòng\s*/i, "");
 const roomLabel = (name: string) => `Phòng ${name.trim().replace(/^Phòng\s*/i, "")}`;
 
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
@@ -302,7 +303,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
-                <ul className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3 sm:gap-3">
+                <ul className="grid grid-cols-3 items-stretch gap-2 sm:gap-3">
                   {f.rows.map((r) => (
                     <li key={r.room.id}>
                       <RoomTile
@@ -467,7 +468,8 @@ function RoomTile({
   if (status === "vacant") {
     return (
       <div className="flex h-full min-h-[6.5rem] flex-col rounded-2xl border-2 border-dashed border-line p-3 text-muted">
-        <span className="text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
+        <span className="block text-xs leading-none">Phòng</span>
+        <span className="block text-2xl font-bold leading-tight">{num(room.name)}</span>
         <span className="text-sm">Trống</span>
       </div>
     );
@@ -502,8 +504,9 @@ function RoomTile({
         selected ? "border-2 border-accent" : "border-line hover:border-accent"
       }`}
     >
-      <div className="px-3 pt-3 pb-2">
-        <span className="block break-words text-lg font-bold leading-tight">{roomLabel(room.name)}</span>
+      <div className="px-2.5 pt-3 pb-2 sm:px-3">
+        <span className="block text-xs leading-none text-muted">Phòng</span>
+        <span className="block text-2xl font-bold leading-tight">{num(room.name)}</span>
         <p className={`break-words text-sm ${room.tenant_name ? "font-medium" : "text-muted"}`}>
           {room.tenant_name || "Chưa có tên"}
         </p>
@@ -513,19 +516,21 @@ function RoomTile({
         </p>
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 px-3 pb-3">
+      <div className="flex flex-1 flex-col gap-2 px-2.5 pb-3 sm:gap-1.5 sm:px-3">
         {parts.map((p) => {
           const d = DOT[p.status];
           return (
-            <div key={p.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-              <span
-                className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
-                aria-hidden="true"
-              >
-                {d.icon}
+            <div key={p.key} className="flex flex-col gap-0.5 text-xs text-muted sm:flex-row sm:items-center sm:gap-2">
+              <span className="flex items-center gap-1.5 sm:gap-2">
+                <span
+                  className={`flex size-[18px] shrink-0 items-center justify-center rounded-full text-[10px] ${d.cls}`}
+                  aria-hidden="true"
+                >
+                  {d.icon}
+                </span>
+                <span>{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
               </span>
-              <span>{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
-              <span className="ml-auto whitespace-nowrap font-semibold text-ink">
+              <span className="break-words font-semibold text-ink sm:ml-auto sm:whitespace-nowrap">
                 {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
               </span>
             </div>
@@ -543,7 +548,7 @@ function RoomTile({
         ) : null}
       </div>
 
-      <div className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold ${ACTION_TONE[action]}`}>
+      <div className={`flex items-center gap-1.5 px-2.5 py-2 text-sm font-semibold sm:px-3 ${ACTION_TONE[action]}`}>
         <span aria-hidden="true">{actionIcon}</span>
         <span className="min-w-0 break-words">{actionLabel}</span>
         <span className="ml-auto" aria-hidden="true">
