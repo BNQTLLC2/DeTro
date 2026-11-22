@@ -178,6 +178,18 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   const v = first(sp.v);
   const view: Filter = FILTERS.find((f) => f === v) ?? "all";
   const shown = view === "all" ? rows : rows.filter((r) => r.parts.some((p) => p.status === view));
+  const selected = Number(first(sp.room)) || null;
+
+  // Tầng = chữ số đầu của số phòng 3 chữ số (101 -> Tầng 1). Phòng tên khác xếp vào "Khác".
+  const byFloor = new Map<string, typeof rows>();
+  for (const r of shown) {
+    const m = r.room.name.trim().match(/(\d)\d{2}$/);
+    const label = m ? `Tầng ${m[1]}` : "Khác";
+    byFloor.set(label, [...(byFloor.get(label) ?? []), r]);
+  }
+  const floors = [...byFloor.entries()]
+    .sort(([a], [b]) => (a === "Khác" ? 1 : b === "Khác" ? -1 : a.localeCompare(b)))
+    .map(([label, rs]) => ({ label, rows: rs }));
   const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
 
   return (
@@ -291,16 +303,49 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
           </ActionForm>
         ) : null}
 
-        <ul className="card divide-y divide-line overflow-hidden !p-0">
-          {shown.map((row) => (
-            <RoomItem
-              key={row.room.id}
-              row={row}
-              period={period}
-              got={row.inv ? (received.get(row.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
-            />
-          ))}
-        </ul>
+        {floors.length === 0 ? (
+          <p className="card text-center text-muted">Không có phòng nào.</p>
+        ) : null}
+        <div className="flex flex-col gap-5">
+          {floors.map((f) => {
+            const used = f.rows.filter((r) => r.status !== "vacant").length;
+            const open = f.rows.find((r) => r.room.id === selected);
+            return (
+              <section key={f.label} className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-base font-bold">{f.label}</h3>
+                  <span className="text-xs text-muted">
+                    {used}/{f.rows.length} đang thuê
+                  </span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <ul className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {f.rows.map((r) => (
+                    <li key={r.room.id}>
+                      <RoomTile
+                        row={r}
+                        selected={r.room.id === selected}
+                        href={`/admin?m=${period}${view !== "all" ? `&v=${view}` : ""}${
+                          r.room.id === selected ? "" : `&room=${r.room.id}`
+                        }`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                {open ? (
+                  <ul className="card overflow-hidden !p-0">
+                    <RoomItem
+                      row={open}
+                      period={period}
+                      open
+                      got={open.inv ? (received.get(open.inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 }}
+                    />
+                  </ul>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
       </section>
 
       {/* Giao dịch SePay */}
@@ -377,6 +422,84 @@ type RowData = {
   parts: PartInfo[];
 };
 
+/** Trạng thái gộp của phòng: dùng chung cho ô nhỏ và thẻ chi tiết. */
+function roomSummary(parts: PartInfo[]) {
+  const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
+  const merged =
+    parts.length === 2 && parts.every((p) => p.status === "unpaid" || p.status === "paid");
+  const unpaidParts = parts.filter((p) => p.status === "unpaid");
+  const allPaid = merged && unpaidParts.length === 0;
+  let tone: Status;
+  let toneLabel: string;
+  if (merged) {
+    tone = allPaid ? "paid" : "unpaid";
+    toneLabel = allPaid ? "Đã thu đủ" : "Chưa thu đủ";
+  } else {
+    const unpaidSum = unpaidParts.reduce((t, p) => t + (p.amount ?? 0), 0);
+    tone =
+      (["draft", "unpaid", "pending"] as const).find((st) => parts.some((p) => p.status === st)) ??
+      "paid";
+    toneLabel =
+      unpaidParts.length > 0
+        ? `Chưa thu ${moneyD(unpaidSum)}`
+        : tone === "draft"
+          ? "Chưa công bố"
+          : tone === "pending"
+            ? "Chưa nhập số"
+            : "Đã thu";
+  }
+  return { total, merged, unpaidParts, allPaid, tone, toneLabel };
+}
+
+const TILE_EDGE: Record<Status, string> = {
+  vacant: "border-l-warn",
+  pending: "border-l-line",
+  draft: "border-l-warn",
+  unpaid: "border-l-bad",
+  paid: "border-l-ok",
+};
+const TILE_DOT: Record<Status, string> = {
+  vacant: "bg-warn",
+  pending: "bg-muted",
+  draft: "bg-warn",
+  unpaid: "bg-bad",
+  paid: "bg-ok",
+};
+
+/** Ô phòng nhỏ trong lưới theo tầng; bấm để mở thẻ thu tiền của phòng. */
+function RoomTile({ row, selected, href }: { row: RowData; selected: boolean; href: string }) {
+  const { room, parts, status } = row;
+  const sum = roomSummary(parts);
+  const tone: Status = status === "vacant" ? "vacant" : sum.tone;
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-xl font-bold">{room.name.replace(/^Phòng\s*/i, "")}</span>
+        <span className={`size-2.5 shrink-0 rounded-full ${TILE_DOT[tone]}`} aria-hidden="true" />
+      </div>
+      {status === "vacant" ? (
+        <p className="text-sm font-medium text-warn">Trống</p>
+      ) : (
+        <>
+          <p className={`truncate text-sm font-medium ${room.tenant_name ? "" : "text-muted"}`}>
+            {room.tenant_name || "Chưa có tên"}
+          </p>
+          <p className={`truncate text-xs font-semibold ${ST[tone].text}`}>{sum.toneLabel}</p>
+        </>
+      )}
+    </>
+  );
+  const cls = `card flex h-full flex-col gap-1 border-l-4 !p-3 no-underline ${TILE_EDGE[tone]} ${
+    selected ? "!border-2 !border-accent !border-l-4" : ""
+  }`;
+  if (status === "vacant") return <div className={cls}>{body}</div>;
+  return (
+    <Link href={href} scroll={false} aria-current={selected ? "true" : undefined} className={`${cls} transition-colors hover:border-accent`}>
+      {body}
+    </Link>
+  );
+}
+
 /** Chip nhỏ cạnh hạn thu: Chưa công bố / Chưa nhập số. */
 const CHIP = "chip w-fit !px-2 !py-0.5 !text-xs bg-warn-bg text-warn";
 
@@ -389,10 +512,12 @@ function RoomItem({
   row,
   period,
   got,
+  open = false,
 }: {
   row: RowData;
   period: string;
   got: { rent: number; other: number };
+  open?: boolean;
 }) {
   const { room, inv, status, res, parts } = row;
 
@@ -413,11 +538,7 @@ function RoomItem({
   }
 
   const hidden = { room: room.id, period };
-  const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
-  const merged =
-    parts.length === 2 && parts.every((p) => p.status === "unpaid" || p.status === "paid");
-  const unpaidParts = parts.filter((p) => p.status === "unpaid");
-  const allPaid = merged && unpaidParts.length === 0;
+  const { merged, unpaidParts, allPaid, tone, toneLabel, total } = roomSummary(parts);
 
   // Số đã thu của một đợt: đã đánh dấu thu thì đủ, chưa thì tính theo tiền SePay đã nhận.
   const collectedOf = (p: PartInfo) =>
@@ -425,30 +546,11 @@ function RoomItem({
   const collected = parts.reduce((t, p) => t + collectedOf(p), 0);
   const remaining = Math.max(total - collected, 0);
   const pct = total > 0 ? Math.min(Math.round((collected / total) * 100), 100) : 0;
-
-  // Màu và chữ ở đầu thẻ
-  let tone: Status;
-  let toneLabel: string;
-  if (merged) {
-    tone = allPaid ? "paid" : "unpaid";
-    toneLabel = allPaid ? "Đã thu đủ" : "Chưa thu đủ";
-  } else {
-    const unpaidSum = unpaidParts.reduce((t, p) => t + (p.amount ?? 0), 0);
-    tone = (["draft", "unpaid", "pending"] as const).find((st) => parts.some((p) => p.status === st)) ?? "paid";
-    toneLabel =
-      unpaidParts.length > 0
-        ? `Chưa thu ${moneyD(unpaidSum)}`
-        : tone === "draft"
-          ? "Chưa công bố"
-          : tone === "pending"
-            ? "Chưa nhập số"
-            : "Đã thu";
-  }
   const s = ST[tone];
 
   return (
     <li>
-      <details className="group">
+      <details className="group" open={open}>
         <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
           <span
             className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${s.badge}`}
