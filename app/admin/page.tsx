@@ -33,9 +33,11 @@ import {
 
 export const metadata = { title: "Tổng quan tháng" };
 
-/** Nút phụ dạng chữ (hủy công bố, bỏ đánh dấu): nhỏ gọn, không tranh chỗ với nút chính. */
-const SUBTLE =
-  "min-h-11 w-full cursor-pointer rounded-xl text-center text-sm font-semibold text-muted underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-45";
+/** Nút phụ: viền mảnh, thấp hơn nút chính, cùng bo góc và độ rộng để hàng nút gọn gàng. */
+const BTN_2ND =
+  "inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-xl border bg-surface px-4 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+const SUBTLE = `${BTN_2ND} border-line text-muted hover:bg-idle-bg`;
+const CANCEL = `${BTN_2ND} border-bad/40 text-bad hover:bg-bad-bg`;
 
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 
@@ -419,7 +421,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                           ) : null}
 
                           {p.status === "unpaid" ? (
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-2">
                               <ActionForm action={setPaidAction}>
                                 <Hidden {...hidden} />
                                 <input type="hidden" name="part" value={p.key} />
@@ -432,7 +434,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                                 <Hidden {...hidden} />
                                 <ConfirmButton
                                   message={`Hủy công bố ${p.key === "rent" ? "tiền trọ" : "điện, nước, phí khác"} của ${room.name}? Người thuê sẽ không còn thấy khoản này.`}
-                                  className={SUBTLE}
+                                  className={CANCEL}
                                   pendingText="Đang hủy..."
                                 >
                                   Hủy công bố
