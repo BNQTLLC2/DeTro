@@ -11,7 +11,7 @@ import {
   type RoomFee,
 } from "./billing";
 import { todayVN } from "./format";
-import { parsePaymentCode, type SepayPayload } from "./sepay";
+import { isValidPrefix, parsePaymentCode, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
 
@@ -25,9 +25,14 @@ export type Settings = {
   bank_code: string;
   bank_account: string;
   bank_holder: string;
-  /** Tiền tố mã thanh toán, trùng với cấu hình "Cấu trúc mã thanh toán" bên SePay. */
+  /** Tiền tố mã thanh toán (biến môi trường SEPAY_PREFIX), trùng "Cấu trúc mã thanh toán" bên SePay. */
   sepay_prefix: string;
 };
+
+function sepayPrefixFromEnv(): string {
+  const p = (process.env.SEPAY_PREFIX ?? "").trim().toUpperCase();
+  return isValidPrefix(p) ? p : "TRO";
+}
 
 export type Room = {
   id: number;
@@ -161,14 +166,14 @@ export async function getSettings(): Promise<Settings> {
     water_low: n("water_low", 15000),
     water_high: n("water_high", 25000),
     due_days: n("due_days", 5),
-    bank_code: s("bank_code"),
-    bank_account: s("bank_account"),
-    bank_holder: s("bank_holder"),
-    sepay_prefix: s("sepay_prefix", "TRO"),
+    bank_code: (process.env.BANK_CODE ?? "").trim().toUpperCase(),
+    bank_account: (process.env.BANK_ACCOUNT ?? "").replace(/\s/g, ""),
+    bank_holder: (process.env.BANK_HOLDER ?? "").trim(),
+    sepay_prefix: sepayPrefixFromEnv(),
   };
 }
 
-export async function saveSettings(p: Partial<Record<keyof Settings, string | number>>): Promise<void> {
+export async function saveSettings(p: Partial<Record<Exclude<keyof Settings, "sepay_prefix" | "bank_code" | "bank_account" | "bank_holder">, string | number>>): Promise<void> {
   for (const [k, v] of Object.entries(p)) {
     await q(
       "insert into settings (key, value) values ($1, $2) on conflict (key) do update set value = excluded.value",

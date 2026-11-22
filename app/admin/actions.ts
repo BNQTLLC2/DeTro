@@ -6,7 +6,6 @@ import { requireAdmin } from "@/lib/auth";
 import { isPeriod } from "@/lib/format";
 import type { FeeMethod } from "@/lib/billing";
 import * as Q from "@/lib/queries";
-import { isValidPrefix } from "@/lib/sepay";
 
 /* ------------------------------ Hàm hỗ trợ ------------------------------ */
 
@@ -205,8 +204,6 @@ export async function saveSettingsAction(fd: FormData) {
   await run("/admin/cai-dat", "Đã lưu cài đặt. Hóa đơn đã công bố giữ nguyên giá cũ.", async () => {
     const quota = numOf(fd, "water_quota");
     if (quota === null || quota < 0) throw new Error("Định mức nước không hợp lệ.");
-    const prefix = str(fd, "sepay_prefix").toUpperCase();
-    if (!isValidPrefix(prefix)) throw new Error("Tiền tố mã thanh toán chỉ gồm 2–8 chữ cái (ví dụ TRO).");
     await Q.saveSettings({
       house_name: str(fd, "house_name") || "Nhà trọ",
       elec_price: Math.max(intOf(fd, "elec_price"), 0),
@@ -214,10 +211,6 @@ export async function saveSettingsAction(fd: FormData) {
       water_low: Math.max(intOf(fd, "water_low"), 0),
       water_high: Math.max(intOf(fd, "water_high"), 0),
       due_days: Math.max(intOf(fd, "due_days", 5), 0),
-      bank_code: str(fd, "bank_code").toUpperCase(),
-      bank_account: str(fd, "bank_account").replace(/\s/g, ""),
-      bank_holder: str(fd, "bank_holder"),
-      sepay_prefix: prefix,
     });
   });
 }

@@ -229,11 +229,8 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
       {settings.bank_code === "" || settings.bank_account === "" ? (
         <p className="mt-4 rounded-xl bg-warn-bg p-3 text-sm text-warn">
-          Chưa nhập thông tin ngân hàng nên hóa đơn của người thuê chưa có mã QR chuyển khoản. Vào{" "}
-          <Link href="/admin/cai-dat" className="underline">
-            Cài đặt
-          </Link>{" "}
-          để thêm.
+          Chưa cấu hình tài khoản ngân hàng nên hóa đơn của người thuê chưa có mã QR chuyển khoản. Hãy đặt biến môi
+          trường BANK_CODE và BANK_ACCOUNT trên Vercel rồi deploy lại.
         </p>
       ) : null}
     </main>

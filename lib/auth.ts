@@ -4,6 +4,26 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+/**
+ * Đường dẫn đăng nhập bí mật (biến ADMIN_LOGIN_PATH, ví dụ "vao-tro-k7x2"). Khi đặt, trang /login và trang
+ * chủ trả về 404, người lạ không thấy trang đăng nhập ở đâu cả. Để trống thì dùng /login như thường.
+ */
+export function hiddenLoginSlug(): string {
+  const v = (process.env.ADMIN_LOGIN_PATH ?? "").trim().replace(/^\/+|\/+$/g, "").toLowerCase();
+  return /^[a-z0-9_-]{6,64}$/.test(v) && !["login", "admin", "api", "p"].includes(v) ? v : "";
+}
+
+/** Nơi chuyển người lạ tới khi trang đăng nhập đang được giấu (đổi bằng biến HIDDEN_REDIRECT_URL). */
+export function decoyUrl(): string {
+  const v = (process.env.HIDDEN_REDIRECT_URL ?? "").trim();
+  return /^https?:\/\//.test(v) ? v : "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+}
+
+export function loginPath(): string {
+  const s = hiddenLoginSlug();
+  return s ? `/${s}` : "/login";
+}
+
 export const SESSION_COOKIE = "admin_session";
 export const SESSION_DAYS = 30;
 
@@ -55,5 +75,8 @@ export async function isAdmin(): Promise<boolean> {
 
 /** Dùng ở đầu mọi trang và mọi server action của chủ trọ. */
 export async function requireAdmin(): Promise<void> {
-  if (!(await isAdmin())) redirect("/login");
+  if (await isAdmin()) return;
+  // Đã giấu trang đăng nhập thì người chưa đăng nhập chỉ thấy 404, không bị chuyển tới trang đăng nhập.
+  if (hiddenLoginSlug()) redirect(decoyUrl());
+  redirect("/login");
 }

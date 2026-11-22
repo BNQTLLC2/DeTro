@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { checkPassword, makeSessionToken, SESSION_COOKIE, SESSION_DAYS } from "@/lib/auth";
+import { checkPassword, loginPath, makeSessionToken, SESSION_COOKIE, SESSION_DAYS } from "@/lib/auth";
 import { clearLoginFailures, isLoginLocked, recordLoginFailure } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ function clientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const ip = clientIp(req);
-  const back = (e: string) => NextResponse.redirect(new URL(`/login?e=${e}`, req.url), 303);
+  const back = (e: string) => NextResponse.redirect(new URL(`${loginPath()}?e=${e}`, req.url), 303);
 
   if (await isLoginLocked(ip)) return back("locked");
 

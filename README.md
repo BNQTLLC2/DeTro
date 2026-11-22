@@ -42,14 +42,20 @@ npm test            # test tính tiền và toàn bộ luồng với Postgres th
 Trang người thuê có mã VietQR (đã điền sẵn số tiền còn thiếu và nội dung chuyển khoản) cùng nút **Tải mã QR về máy**.
 Khi người thuê chuyển khoản, SePay gọi webhook và hóa đơn tự chuyển sang "Đã đóng tiền".
 
-1. Vào **Cài đặt** của web: nhập ngân hàng (mã như `MBBANK`, `VCB`...), số tài khoản, tên chủ tài khoản và **Tiền tố mã thanh toán** (mặc định `TRO`).
-2. Tại my.sepay.vn: kết nối tài khoản ngân hàng, vào *Cấu hình công ty > Cấu trúc mã thanh toán* đặt tiền tố **giống hệt** tiền tố ở bước 1.
+1. Trên Vercel đặt biến môi trường tài khoản nhận tiền: `BANK_CODE` (mã VietQR như `MB`, `VCB`, `TCB`, `ACB`, `BIDV`, `VPB`, `VBA`), `BANK_ACCOUNT` (số tài khoản), `BANK_HOLDER` (tên chủ tài khoản).
+2. Tại my.sepay.vn: kết nối tài khoản ngân hàng, vào *Cấu hình công ty > Cấu trúc mã thanh toán* đặt tiền tố (mặc định `TRO`). Nếu dùng tiền tố khác, đặt biến môi trường `SEPAY_PREFIX` cho trùng.
 3. Tại SePay, tạo webhook: sự kiện **Có tiền vào**, URL `https://<tên-miền-của-bạn>/api/sepay`, kiểu chứng thực **API Key**, đặt một khóa bí mật.
-4. Trên Vercel thêm biến môi trường `SEPAY_API_KEY` bằng đúng khóa đó, rồi Redeploy.
+4. Trên Vercel thêm biến môi trường `SEPAY_API_KEY` bằng đúng khóa đó (và `SEPAY_PREFIX` nếu đổi tiền tố), rồi Redeploy. Tài khoản ngân hàng và SePay chỉ cấu hình bằng biến môi trường, không có trong trang Cài đặt.
 
 Cách hoạt động: nội dung chuyển khoản dạng `TRO<mã hóa đơn>`; tiền về đủ thì tự đánh dấu đã đóng, thiếu thì hiện số còn lại và QR cập nhật theo.
 Giao dịch không khớp hóa đơn nào được liệt kê ở trang Tổng quan. Mỗi giao dịch SePay chỉ được ghi một lần (chống gọi trùng).
 Lưu ý: một số ngân hàng (ví dụ VietinBank) có thể không cho tùy biến nội dung chuyển khoản, khi đó cần đối chiếu thủ công ở mục "tiền về chưa khớp".
+
+## Giấu trang đăng nhập (tùy chọn)
+
+Đặt biến môi trường `ADMIN_LOGIN_PATH` là một chuỗi khó đoán (6-64 ký tự a-z, 0-9, `-`, `_`), ví dụ `vao-tro-k7x2`, rồi Redeploy.
+Từ đó trang đăng nhập chỉ mở ở `https://<tên-miền>/vao-tro-k7x2`; `/login`, trang chủ và `/admin` (khi chưa đăng nhập) đều chuyển hướng tới https://www.youtube.com/watch?v=dQw4w9WgXcQ (đổi bằng biến `HIDDEN_REDIRECT_URL`).
+Hãy lưu đường dẫn này vào bookmark. Quên thì xem lại biến `ADMIN_LOGIN_PATH` trên Vercel.
 
 ## Quy tắc tính tiền
 

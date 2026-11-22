@@ -71,7 +71,9 @@ describe("webhook /api/sepay với database thật", () => {
     Q = await import("@/lib/queries");
     ({ POST } = await import("@/app/api/sepay/route"));
 
-    await Q.saveSettings({ bank_code: "VCB", bank_account: "0123456789", bank_holder: "A", sepay_prefix: "TRO" });
+    process.env.BANK_CODE = "VCB";
+    process.env.BANK_ACCOUNT = "0123456789";
+    process.env.BANK_HOLDER = "A";
     const [room] = await Q.listRooms();
     await Q.saveRoom(room.id, { ...room, rent: 1000000, occupants: 1, tenant_name: "A", billing_day: 20 });
     await Q.saveReading(room.id, "2026-11", "elec", 0, 100);
