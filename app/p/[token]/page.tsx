@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AutoRefresh } from "@/components/AutoRefresh";
+import { PaymentWatcher } from "@/components/AutoRefresh";
 import { CopyTextButton } from "@/components/CopyButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -108,6 +108,7 @@ export default async function TenantPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
+      {qrReady ? null : <PaymentWatcher token={token} invoiceId={inv.id} paid={paid} received={received} />}
       {header}
 
       {/* Chọn tháng */}
@@ -289,7 +290,7 @@ export default async function TenantPage({
       {/* Chuyển khoản */}
       {qrReady ? (
         <section className="card flex flex-col items-center gap-3">
-          {autoConfirm ? <AutoRefresh seconds={10} /> : null}
+          
           <h2 className="self-start text-lg font-bold">Chuyển khoản</h2>
           {received > 0 ? (
             <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
@@ -324,6 +325,7 @@ export default async function TenantPage({
             <dd className="text-right font-semibold">{content}</dd>
           </dl>
           <CopyTextButton text={content} label="Sao chép nội dung chuyển khoản" />
+          <PaymentWatcher token={token} invoiceId={inv.id} paid={paid} received={received} showButton />
           <p className="text-center text-xs leading-5 text-muted">
             Hãy giữ nguyên nội dung chuyển khoản.{" "}
             {autoConfirm

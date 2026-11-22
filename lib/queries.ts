@@ -566,6 +566,19 @@ export async function receivedFor(invoiceId: number): Promise<number> {
   return rows[0].total;
 }
 
+/** Trạng thái thanh toán của một hóa đơn đã công bố (cho trang người thuê hỏi nhanh theo thời gian thật). */
+export async function paymentStatus(token: string, invoiceId: number): Promise<{ paid: boolean; received: number } | null> {
+  if (!/^[0-9a-f]{32}$/.test(token)) return null;
+  const rows = await q(
+    `select (i.paid_at is not null) as paid,
+            coalesce((select sum(amount) from payments p where p.invoice_id = i.id), 0)::int as received
+     from invoices i join rooms r on r.id = i.room_id
+     where r.token = $1 and i.id = $2 and i.published = true`,
+    [token, invoiceId],
+  );
+  return rows[0] ? { paid: !!rows[0].paid, received: rows[0].received } : null;
+}
+
 /** Giao dịch tiền vào chưa khớp hóa đơn nào (người thuê quên/ghi sai nội dung). */
 export async function listUnmatchedPayments(limit = 10): Promise<Payment[]> {
   return (

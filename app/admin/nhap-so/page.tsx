@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MoneyInput } from "@/components/MoneyInput";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
 import { ReadingForm } from "@/components/ReadingForm";
@@ -291,14 +292,7 @@ export default async function EnterReadings({
               <label htmlFor="adj-amount" className="label">
                 Số tiền
               </label>
-              <input
-                id="adj-amount"
-                name="amount"
-                required
-                inputMode="numeric"
-                className="input"
-                placeholder="120000"
-              />
+              <MoneyInput id="adj-amount" name="amount" required allowNegative placeholder="120,000" />
             </div>
             <button type="submit" className="btn-ghost col-span-2">
               Thêm khoản

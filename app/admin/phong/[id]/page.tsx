@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MoneyInput } from "@/components/MoneyInput";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
 import { TokenPanel } from "@/components/TokenPanel";
@@ -49,7 +50,7 @@ export default async function RoomPage({
             label="Giá thuê (đ/tháng)"
             name="rent"
             defaultValue={String(r.rent)}
-            inputMode="numeric"
+            money
           />
           <Field
             label="Người đại diện"
@@ -72,7 +73,7 @@ export default async function RoomPage({
             label="Tiền cọc (đ)"
             name="deposit"
             defaultValue={String(r.deposit)}
-            inputMode="numeric"
+            money
           />
           <Field
             label="Ngày vào ở"
@@ -140,15 +141,11 @@ export default async function RoomPage({
                 <label htmlFor={`fa-${r.id}-${f.id}`} className="label">
                   Mức riêng (mặc định {moneyD(f.default_amount)})
                 </label>
-                <input
+                <MoneyInput
                   id={`fa-${r.id}-${f.id}`}
                   name={`fee_amount_${f.id}`}
-                  inputMode="numeric"
                   placeholder={String(f.default_amount)}
-                  defaultValue={
-                    f.room_amount === null ? "" : String(f.room_amount)
-                  }
-                  className="input"
+                  defaultValue={f.room_amount === null ? "" : String(f.room_amount)}
                 />
               </div>
               {f.method === "per_unit" ? (
@@ -213,6 +210,7 @@ function Field({
   type = "text",
   inputMode,
   required,
+  money,
 }: {
   label: string;
   name: string;
@@ -220,18 +218,23 @@ function Field({
   type?: string;
   inputMode?: "numeric" | "tel" | "text";
   required?: boolean;
+  money?: boolean;
 }) {
   return (
     <label className="block">
       <span className="label">{label}</span>
-      <input
-        name={name}
-        type={type}
-        inputMode={inputMode}
-        defaultValue={defaultValue}
-        required={required}
-        className="input"
-      />
+      {money ? (
+        <MoneyInput name={name} defaultValue={defaultValue} required={required} />
+      ) : (
+        <input
+          name={name}
+          type={type}
+          inputMode={inputMode}
+          defaultValue={defaultValue}
+          required={required}
+          className="input"
+        />
+      )}
     </label>
   );
 }

@@ -1,3 +1,4 @@
+import { MoneyInput } from "@/components/MoneyInput";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Flash } from "@/components/Flash";
 import { FEE_METHOD_LABEL, type FeeMethod } from "@/lib/billing";
@@ -47,7 +48,7 @@ export default async function SettingsPage({
             label="Giá điện"
             name="elec_price"
             value={String(s.elec_price)}
-            num
+            money
             unit="đ / kWh"
           />
         </section>
@@ -70,14 +71,14 @@ export default async function SettingsPage({
               label="Giá trong định mức"
               name="water_low"
               value={String(s.water_low)}
-              num
+              money
               unit="đ / m³"
             />
             <T
               label="Giá vượt định mức"
               name="water_high"
               value={String(s.water_high)}
-              num
+              money
               unit="đ / m³"
             />
           </div>
@@ -149,7 +150,7 @@ export default async function SettingsPage({
                       label="Mức mặc định (đ)"
                       name="amount"
                       value={String(f.default_amount)}
-                      num
+                      money
                     />
                     <label className="col-span-2 flex min-h-11 items-center gap-3 text-sm">
                       <input
@@ -212,7 +213,7 @@ export default async function SettingsPage({
             label="Mức mặc định (đ)"
             name="amount"
             value=""
-            num
+            money
             placeholder="100000"
           />
           <button type="submit" className="btn-ghost col-span-2">
@@ -256,6 +257,7 @@ function T({
   name,
   value,
   num,
+  money,
   dec,
   span,
   placeholder,
@@ -265,6 +267,7 @@ function T({
   name: string;
   value: string;
   num?: boolean;
+  money?: boolean;
   dec?: boolean;
   span?: boolean;
   placeholder?: string;
@@ -274,13 +277,17 @@ function T({
     <label className={span ? "col-span-2 block" : "block"}>
       <span className="label">{label}</span>
       <span className="relative block">
-        <input
-          name={name}
-          defaultValue={value}
-          inputMode={num ? "numeric" : dec ? "decimal" : undefined}
-          placeholder={placeholder}
-          className={unit ? "input pr-20" : "input"}
-        />
+        {money ? (
+          <MoneyInput name={name} defaultValue={value} placeholder={placeholder} className={unit ? "input pr-20" : "input"} />
+        ) : (
+          <input
+            name={name}
+            defaultValue={value}
+            inputMode={num ? "numeric" : dec ? "decimal" : undefined}
+            placeholder={placeholder}
+            className={unit ? "input pr-20" : "input"}
+          />
+        )}
         {unit && (
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted">
             {unit}
