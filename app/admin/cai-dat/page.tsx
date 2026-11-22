@@ -24,12 +24,16 @@ export default async function SettingsPage({
           <Head icon="🏠" title="Thông tin chung" />
           <T label="Tên nhà trọ" name="house_name" value={s.house_name} />
           <T
-            label="Hạn đóng tiền sau ngày chốt số"
-            name="due_days"
-            value={String(s.due_days)}
+            label="Ngày thu chi phí khác hằng tháng"
+            name="fee_day"
+            value={String(s.fee_day)}
             num
             unit="ngày"
           />
+          <p className="-mt-1 text-sm text-muted">
+            Điện, nước, rác, wifi... thu một lần vào ngày này (ngày thu đầu tiên
+            sau ngày chốt số). Tiền trọ thu riêng theo ngày vào ở của từng phòng.
+          </p>
         </section>
 
         <section className="card flex flex-col gap-3">

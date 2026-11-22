@@ -104,6 +104,10 @@ const SCHEMA: string[] = [
     created_at timestamptz not null default now()
   )`,
   `alter table payments add column if not exists note text not null default ''`,
+  // Hai đợt thu: tiền trọ (rent_*) và chi phí khác (published / paid_at như trước).
+  `alter table invoices add column if not exists rent_paid_at text`,
+  `alter table invoices add column if not exists rent_published boolean not null default false`,
+  `alter table payments add column if not exists part text not null default 'other'`,
   `create table if not exists login_attempts (
     ip text not null,
     at timestamptz not null default now()
@@ -120,6 +124,7 @@ async function seed(run: Runner): Promise<void> {
     water_low: "15000",
     water_high: "25000",
     due_days: "5",
+    fee_day: "6",
     bank_code: "",
     bank_account: "",
     bank_holder: "",
@@ -151,9 +156,19 @@ async function seed(run: Runner): Promise<void> {
   );
 }
 
+/** Chạy một lần: hóa đơn cũ (một đợt thu) coi như đã công bố/đã thu cả tiền trọ. */
+async function migrateSplitCollection(run: Runner): Promise<void> {
+  const done = await run("select 1 from settings where key = 'split_collection_migrated'", []);
+  if (done.length > 0) return;
+  await run("update invoices set rent_paid_at = paid_at where paid_at is not null and rent_paid_at is null", []);
+  await run("update invoices set rent_published = true where published = true", []);
+  await run("insert into settings (key, value) values ('split_collection_migrated', '1') on conflict (key) do nothing", []);
+}
+
 async function init(run: Runner): Promise<void> {
   for (const stmt of SCHEMA) await run(stmt, []);
   await seed(run);
+  await migrateSplitCollection(run);
 }
 
 async function getRunner(): Promise<Runner> {

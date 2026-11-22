@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeFees, computeInvoice, type BillingInput, type FeeType, type RoomFee } from "@/lib/billing";
-import { dueDate, normalizePhone, periodRange, shiftPeriod, transferNote } from "@/lib/format";
+import { feeDueDate, normalizePhone, periodRange, rentDay, rentDueDate, rentRange, shiftPeriod, transferNote } from "@/lib/format";
 
 const base: BillingInput = {
   rent: 2800000,
@@ -116,7 +116,19 @@ describe("format", () => {
   it("kỳ tính và hạn đóng", () => {
     expect(shiftPeriod("2026-01", -1)).toBe("2025-12");
     expect(periodRange("2026-11", 20)).toBe("21/10 – 20/11");
-    expect(dueDate("2026-11", 20, 5)).toBe("25/11/2026");
     expect(periodRange("2026-03", 31)).toBe("01/03 – 31/03");
+  });
+  it("tiền trọ thu theo ngày vào ở, thu sau", () => {
+    expect(rentDay("2026-03-15", 20)).toBe(15);
+    expect(rentDay("", 20)).toBe(20); // chưa nhập ngày vào ở thì dùng ngày chốt số
+    expect(rentDueDate("2026-11", "2026-03-15", 20)).toBe("15/11/2026");
+    expect(rentDueDate("2026-02", "2026-01-31", 20)).toBe("28/02/2026"); // tháng ngắn
+    expect(rentRange("2026-11", "2026-03-15", 20)).toBe("15/10 – 14/11");
+    expect(rentRange("2026-11", "2026-03-01", 20)).toBe("01/10 – 31/10");
+  });
+  it("chi phí khác thu vào ngày cố định hằng tháng, ngày thu đầu tiên sau ngày chốt số", () => {
+    expect(feeDueDate("2026-11", 20, 6)).toBe("06/12/2026"); // chốt 20, thu ngày 6 tháng sau
+    expect(feeDueDate("2026-11", 3, 6)).toBe("06/11/2026"); // chốt 3, kịp thu ngày 6 cùng tháng
+    expect(feeDueDate("2026-12", 20, 6)).toBe("06/01/2027");
   });
 });

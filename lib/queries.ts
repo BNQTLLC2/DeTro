@@ -11,7 +11,7 @@ import {
   type RoomFee,
 } from "./billing";
 import { todayVN } from "./format";
-import { isValidPrefix, parsePaymentCode, parsePaymentRef, type SepayPayload } from "./sepay";
+import { isValidPrefix, parsePaymentCode, parsePaymentTarget, type PaymentPart, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
 
@@ -21,7 +21,8 @@ export type Settings = {
   water_quota: number;
   water_low: number;
   water_high: number;
-  due_days: number;
+  /** Ngày thu các chi phí khác (điện, nước, phí...) hằng tháng. */
+  fee_day: number;
   bank_code: string;
   bank_account: string;
   bank_holder: string;
@@ -71,7 +72,11 @@ export type Invoice = {
   adjustments: Fee[];
   published: boolean;
   published_at: string | null;
+  /** Đã thu chi phí khác (điện, nước, phí, phát sinh). */
   paid_at: string | null;
+  /** Tiền trọ được công bố riêng, không cần số điện nước. */
+  rent_published: boolean;
+  rent_paid_at: string | null;
 };
 
 export type RoomFeeRow = FeeType & {
@@ -125,6 +130,8 @@ function toInvoice(r: Row): Invoice {
     published: r.published,
     published_at: r.published_at ? new Date(r.published_at).toISOString() : null,
     paid_at: r.paid_at,
+    rent_published: !!r.rent_published,
+    rent_paid_at: r.rent_paid_at ?? null,
   };
 }
 
@@ -165,7 +172,7 @@ export async function getSettings(): Promise<Settings> {
     water_quota: n("water_quota", 4),
     water_low: n("water_low", 15000),
     water_high: n("water_high", 25000),
-    due_days: n("due_days", 5),
+    fee_day: n("fee_day", 6),
     bank_code: (process.env.BANK_CODE ?? "").trim().toUpperCase(),
     bank_account: (process.env.BANK_ACCOUNT ?? "").replace(/\s/g, ""),
     bank_holder: (process.env.BANK_HOLDER ?? "").trim(),
@@ -410,6 +417,16 @@ export async function listPublishedInvoices(roomId: number): Promise<Invoice[]> 
   ).map(toInvoice);
 }
 
+/** Các hóa đơn người thuê được xem: đã công bố chi phí khác hoặc đã công bố tiền trọ. */
+export async function listVisibleInvoices(roomId: number): Promise<Invoice[]> {
+  return (
+    await q(
+      "select * from invoices where room_id = $1 and (published = true or rent_published = true) order by period asc",
+      [roomId],
+    )
+  ).map(toInvoice);
+}
+
 /** Chốt số gần nhất trước kỳ này (dùng làm số đầu mặc định). */
 export async function previousEnds(
   roomId: number,
@@ -525,11 +542,28 @@ export async function publishInvoice(roomId: number, period: string): Promise<vo
   await q("update invoices set published = true, published_at = coalesce(published_at, now()) where id = $1", [inv.id]);
   // Tiền có thể đã về trước khi công bố: nếu đủ thì đánh dấu đã thu luôn.
   const fresh = await getInvoiceById(inv.id);
-  if (fresh) await settleInvoice(fresh, todayVN());
+  if (fresh) await settleInvoice(fresh, "other", todayVN());
 }
 
 export async function unpublishInvoice(roomId: number, period: string): Promise<void> {
   await q("update invoices set published = false where room_id = $1 and period = $2", [roomId, period]);
+}
+
+/** Công bố tiền trọ của kỳ này cho người thuê (không cần nhập số điện nước). */
+export async function publishRent(roomId: number, period: string): Promise<void> {
+  const room = await getRoom(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng.");
+  if (room.rent <= 0) throw new Error("Phòng này chưa có tiền trọ. Nhập tiền trọ ở trang phòng trước.");
+  const inv = await ensureInvoice(room, period);
+  // Chưa công bố gì thì lấy tiền trọ hiện tại của phòng; đã công bố thì giữ mức đã chốt.
+  if (!inv.published_at && !inv.rent_published) await q("update invoices set rent=$2 where id=$1", [inv.id, room.rent]);
+  await q("update invoices set rent_published = true where id = $1", [inv.id]);
+  const fresh = await getInvoiceById(inv.id);
+  if (fresh) await settleInvoice(fresh, "rent", todayVN());
+}
+
+export async function unpublishRent(roomId: number, period: string): Promise<void> {
+  await q("update invoices set rent_published = false where room_id = $1 and period = $2", [roomId, period]);
 }
 
 /** Công bố tất cả phòng đã nhập đủ điện và nước nhưng chưa công bố. Trả về số phòng đã công bố. */
@@ -547,8 +581,11 @@ export async function publishAll(period: string): Promise<number> {
   return n;
 }
 
-export async function setPaid(roomId: number, period: string, paid: boolean): Promise<void> {
-  await q("update invoices set paid_at = $3 where room_id = $1 and period = $2 and published = true", [
+/** Đánh dấu đã thu / bỏ đánh dấu cho một đợt thu (tiền trọ hoặc chi phí khác). */
+export async function setPaid(roomId: number, period: string, paid: boolean, part: PaymentPart = "other"): Promise<void> {
+  const col = part === "rent" ? "rent_paid_at" : "paid_at";
+  const gate = part === "rent" ? "rent_published" : "published";
+  await q(`update invoices set ${col} = $3 where room_id = $1 and period = $2 and ${gate} = true`, [
     roomId,
     period,
     paid ? todayVN() : null,
@@ -589,6 +626,8 @@ export type Payment = {
   tx_date: string;
   /** Kết quả xử lý: đã khớp hóa đơn nào, vì sao chưa khớp... */
   note: string;
+  /** Đợt thu: tiền trọ hoặc chi phí khác. */
+  part: PaymentPart;
 };
 
 function toPayment(r: Row): Payment {
@@ -601,6 +640,7 @@ function toPayment(r: Row): Payment {
     gateway: r.gateway,
     tx_date: r.tx_date,
     note: r.note ?? "",
+    part: r.part === "rent" ? "rent" : "other",
   };
 }
 
@@ -609,28 +649,42 @@ export async function getInvoiceById(id: number): Promise<Invoice | null> {
   return rows[0] ? toInvoice(rows[0]) : null;
 }
 
-/** Tổng số tiền đã nhận qua SePay cho từng hóa đơn. */
-export async function receivedByInvoice(): Promise<Map<number, number>> {
+/** Tổng số tiền đã nhận qua SePay cho từng hóa đơn, tách theo đợt thu. */
+export async function receivedByInvoice(): Promise<Map<number, Record<PaymentPart, number>>> {
   const rows = await q(
-    "select invoice_id, sum(amount)::int as total from payments where invoice_id is not null group by invoice_id",
+    "select invoice_id, part, sum(amount)::int as total from payments where invoice_id is not null group by invoice_id, part",
   );
-  return new Map(rows.map((r) => [r.invoice_id as number, r.total as number]));
+  const m = new Map<number, Record<PaymentPart, number>>();
+  for (const r of rows) {
+    const cur = m.get(r.invoice_id as number) ?? { rent: 0, other: 0 };
+    cur[r.part === "rent" ? "rent" : "other"] += r.total as number;
+    m.set(r.invoice_id as number, cur);
+  }
+  return m;
 }
 
-export async function receivedFor(invoiceId: number): Promise<number> {
-  const rows = await q("select coalesce(sum(amount), 0)::int as total from payments where invoice_id = $1", [invoiceId]);
+export async function receivedFor(invoiceId: number, part: PaymentPart = "other"): Promise<number> {
+  const rows = await q(
+    "select coalesce(sum(amount), 0)::int as total from payments where invoice_id = $1 and part = $2",
+    [invoiceId, part],
+  );
   return rows[0].total;
 }
 
-/** Trạng thái thanh toán của một hóa đơn đã công bố (cho trang người thuê hỏi nhanh theo thời gian thật). */
-export async function paymentStatus(token: string, invoiceId: number): Promise<{ paid: boolean; received: number } | null> {
+/** Trạng thái thanh toán của một đợt thu đã công bố (cho trang người thuê hỏi nhanh theo thời gian thật). */
+export async function paymentStatus(
+  token: string,
+  invoiceId: number,
+  part: PaymentPart = "other",
+): Promise<{ paid: boolean; received: number } | null> {
   if (!/^[0-9a-f]{32}$/.test(token)) return null;
+  const rent = part === "rent";
   const rows = await q(
-    `select (i.paid_at is not null) as paid,
-            coalesce((select sum(amount) from payments p where p.invoice_id = i.id), 0)::int as received
+    `select (${rent ? "i.rent_paid_at" : "i.paid_at"} is not null) as paid,
+            coalesce((select sum(amount) from payments p where p.invoice_id = i.id and p.part = $3), 0)::int as received
      from invoices i join rooms r on r.id = i.room_id
-     where r.token = $1 and i.id = $2 and i.published = true`,
-    [token, invoiceId],
+     where r.token = $1 and i.id = $2 and ${rent ? "i.rent_published" : "i.published"} = true`,
+    [token, invoiceId, part],
   );
   return rows[0] ? { paid: !!rows[0].paid, received: rows[0].received } : null;
 }
@@ -662,60 +716,65 @@ export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
 export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResult> {
   const settings = await getSettings();
   // Webhook đã xác thực bằng API Key nên không cần so số tài khoản (giao dịch giả lập của SePay dùng tài khoản ảo khác).
-  // Ưu tiên nội dung mới "<TIỀN TỐ>_<PHÒNG>_<MM>/<YYYY>"; không thấy thì dùng mã hóa đơn kiểu cũ "<TIỀN TỐ><số>".
+  // Ưu tiên nội dung mới "<TIỀN TỐ>_<PHÒNG>[_TIENTRO]_<MM>/<YYYY>" (có TIENTRO là đợt tiền trọ);
+  // không thấy thì dùng mã hóa đơn kiểu cũ "<TIỀN TỐ><số>" (tính vào chi phí khác).
   const rooms = await listRooms();
   const ref =
-    parsePaymentRef(settings.sepay_prefix, tx.content, rooms) ??
-    parsePaymentRef(settings.sepay_prefix, tx.code ?? "", rooms);
+    parsePaymentTarget(settings.sepay_prefix, tx.content, rooms) ??
+    parsePaymentTarget(settings.sepay_prefix, tx.code ?? "", rooms);
+  const part: PaymentPart = ref?.part ?? "other";
   let inv: Invoice | null = ref ? await getInvoice(ref.roomId, ref.period) : null;
   let invoiceId: number | null = inv ? inv.id : null;
   if (!inv && !ref) {
     invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
     inv = invoiceId ? await getInvoiceById(invoiceId) : null;
   }
+  const partName = part === "rent" ? "tiền trọ" : "chi phí khác";
 
   let note = "";
   if (!inv) {
     if (ref) note = `Không có hóa đơn của ${rooms.find((r) => r.id === ref.roomId)?.name ?? "phòng"} kỳ ${ref.period}`;
     else if (invoiceId) note = `Không có hóa đơn mã ${invoiceId}`;
-    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY) trong nội dung`;
+    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TIENTRO_MM/YYYY) trong nội dung`;
   }
 
   const rows = await q(
-    `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date, note)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict (sepay_id) do nothing returning id`,
-    [tx.id, inv ? inv.id : null, tx.transferAmount, tx.content, tx.code, tx.accountNumber, tx.gateway, tx.transactionDate, note],
+    `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date, note, part)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) on conflict (sepay_id) do nothing returning id`,
+    [tx.id, inv ? inv.id : null, tx.transferAmount, tx.content, tx.code, tx.accountNumber, tx.gateway, tx.transactionDate, note, part],
   );
   if (rows.length === 0) return "duplicate";
   if (!inv) return "unmatched";
 
-  const result = await settleInvoice(inv, /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN());
-  const why: Record<string, string> = {
-    paid: `Khớp hóa đơn #${inv.id}, đã đủ tiền và tự đánh dấu đã thu`,
-    recorded: "",
-  };
-  let finalNote = why[result.state] ?? "";
+  const result = await settleInvoice(inv, part, /^\d{4}-\d{2}-\d{2}/.test(tx.transactionDate) ? tx.transactionDate.slice(0, 10) : todayVN());
+  let finalNote = result.state === "paid" ? `Khớp hóa đơn #${inv.id} (${partName}), đã đủ tiền và tự đánh dấu đã thu` : "";
   if (result.state === "recorded") {
-    finalNote = !inv.published
-      ? `Khớp hóa đơn #${inv.id} nhưng hóa đơn chưa công bố (sẽ tự đánh dấu đã thu khi công bố nếu đủ tiền)`
+    finalNote = !result.published
+      ? `Khớp hóa đơn #${inv.id} (${partName}) nhưng chưa công bố (sẽ tự đánh dấu đã thu khi công bố nếu đủ tiền)`
       : !result.complete
-        ? `Khớp hóa đơn #${inv.id} nhưng chưa nhập đủ điện và nước`
-        : `Khớp hóa đơn #${inv.id}, mới nhận ${result.received.toLocaleString("vi-VN")}đ / ${result.total.toLocaleString("vi-VN")}đ, còn thiếu`;
+        ? `Khớp hóa đơn #${inv.id} (${partName}) nhưng chưa nhập đủ điện và nước`
+        : `Khớp hóa đơn #${inv.id} (${partName}), mới nhận ${result.received.toLocaleString("vi-VN")}đ / ${result.total.toLocaleString("vi-VN")}đ, còn thiếu`;
   }
   await q("update payments set note = $2 where sepay_id = $1", [tx.id, finalNote]);
   return result.state;
 }
 
-/** Nếu hóa đơn đã công bố, đủ số liệu và tiền đã nhận đủ thì đánh dấu đã thu. */
+/** Nếu đợt thu đã công bố, đủ số liệu và tiền đã nhận đủ thì đánh dấu đã thu. */
 async function settleInvoice(
   inv: Invoice,
+  part: PaymentPart,
   date: string,
-): Promise<{ state: "paid" | "recorded"; complete: boolean; received: number; total: number }> {
+): Promise<{ state: "paid" | "recorded"; complete: boolean; published: boolean; received: number; total: number }> {
   const res = invoiceResult(inv);
-  const received = await receivedFor(inv.id);
-  if (inv.published && res.complete && received >= res.total && !inv.paid_at) {
-    await q("update invoices set paid_at = $2 where id = $1", [inv.id, date]);
-    return { state: "paid", complete: true, received, total: res.total };
+  const received = await receivedFor(inv.id, part);
+  const rent = part === "rent";
+  const total = rent ? res.rent : res.othersTotal;
+  const published = rent ? inv.rent_published : inv.published;
+  const complete = rent ? res.rent > 0 : res.complete;
+  const paidAt = rent ? inv.rent_paid_at : inv.paid_at;
+  if (published && complete && received >= total && !paidAt) {
+    await q(`update invoices set ${rent ? "rent_paid_at" : "paid_at"} = $2 where id = $1`, [inv.id, date]);
+    return { state: "paid", complete, published, received, total };
   }
-  return { state: "recorded", complete: res.complete, received, total: res.total };
+  return { state: "recorded", complete, published, received, total };
 }

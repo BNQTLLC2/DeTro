@@ -20,14 +20,20 @@ export function isValidPrefix(p: string): boolean {
   return /^[A-Za-z]{2,8}$/.test(p);
 }
 
+export type PaymentPart = "rent" | "other";
+
+/** Từ khóa phân biệt đợt thu tiền trọ trong nội dung chuyển khoản. */
+const RENT_TAG = "TIENTRO";
+
 /**
- * Nội dung chuyển khoản: "<TIỀN TỐ>_<TÊN PHÒNG>_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_11/2026".
- * `period` dạng "YYYY-MM". Hệ thống khớp hóa đơn theo tên phòng và tháng này.
+ * Nội dung chuyển khoản, mỗi đợt thu một mã riêng (`period` dạng "YYYY-MM"):
+ * - Chi phí khác (điện, nước, phí): "<TIỀN TỐ>_<TÊN PHÒNG>_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_11/2026".
+ * - Tiền trọ: "<TIỀN TỐ>_<TÊN PHÒNG>_TIENTRO_<THÁNG>/<NĂM>", ví dụ "DETRO_PHONG1_TIENTRO_11/2026".
  */
-export function paymentContent(prefix: string, roomName: string, period: string): string {
+export function paymentContent(prefix: string, roomName: string, period: string, part: PaymentPart = "other"): string {
   const [y, m] = period.split("-");
   const name = compact(roomName);
-  return [prefix.toUpperCase(), name, `${m}/${y}`].filter(Boolean).join("_");
+  return [prefix.toUpperCase(), name, part === "rent" ? RENT_TAG : "", `${m}/${y}`].filter(Boolean).join("_");
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -53,6 +59,29 @@ export function parsePaymentRef(
     const month = Number(m[1]);
     if (month < 1 || month > 12) continue;
     return { roomId: r.id, period: `${m[2]}-${m[1]}` };
+  }
+  return null;
+}
+
+/**
+ * Như parsePaymentRef nhưng nhận cả mã tiền trọ ("..._TIENTRO_MM/YYYY") và cho biết giao dịch thuộc đợt thu nào.
+ */
+export function parsePaymentTarget(
+  prefix: string,
+  content: string,
+  rooms: { id: number; name: string }[],
+): { roomId: number; period: string; part: PaymentPart } | null {
+  if (!isValidPrefix(prefix)) return null;
+  const text = compact(content);
+  for (const r of rooms) {
+    const name = compact(r.name);
+    if (!name) continue;
+    const re = new RegExp(`${escapeRe(compact(prefix))}${escapeRe(name)}(${RENT_TAG})?(\\d{2})(20\\d{2})(?!\\d)`);
+    const m = re.exec(text);
+    if (!m) continue;
+    const month = Number(m[2]);
+    if (month < 1 || month > 12) continue;
+    return { roomId: r.id, period: `${m[3]}-${m[2]}`, part: m[1] ? "rent" : "other" };
   }
   return null;
 }

@@ -71,11 +71,39 @@ export function periodRange(period: string, billingDay: number): string {
   return `${dm(start)} – ${dm(end)}`;
 }
 
-/** Hạn đóng = ngày chốt + số ngày hạn đóng (cài đặt). */
-export function dueDate(period: string, billingDay: number, dueDays: number): string {
+/** Ngày thu tiền trọ mỗi tháng = ngày trong tháng của ngày vào ở (không có thì dùng ngày chốt số). */
+export function rentDay(moveInDate: string, billingDay: number): number {
+  const m = /^\d{4}-\d{2}-(\d{2})$/.exec(moveInDate ?? "");
+  const d = m ? Number(m[1]) : billingDay;
+  return Math.min(Math.max(d, 1), 31);
+}
+
+/** Hạn đóng tiền trọ của kỳ `period`: ngày vào ở trong tháng đó (thu sau, cho kỳ thuê tháng trước đến nay). */
+export function rentDueDate(period: string, moveInDate: string, billingDay: number): string {
   const [y, m] = period.split("-").map(Number);
-  const end = clampDay(y, m, billingDay);
-  return dmy(new Date(end.getTime() + dueDays * 86400000));
+  return dmy(clampDay(y, m, rentDay(moveInDate, billingDay)));
+}
+
+/** Kỳ thuê của tiền trọ: từ ngày vào ở tháng trước đến hết ngày liền trước ngày vào ở tháng này. */
+export function rentRange(period: string, moveInDate: string, billingDay: number): string {
+  const day = rentDay(moveInDate, billingDay);
+  const [y, m] = period.split("-").map(Number);
+  const prev = shiftPeriod(period, -1).split("-").map(Number);
+  const start = clampDay(prev[0], prev[1], day);
+  const end = new Date(clampDay(y, m, day).getTime() - 86400000);
+  return `${dm(start)} – ${dm(end)}`;
+}
+
+/**
+ * Hạn đóng các chi phí khác (điện, nước, phí): ngày cố định hằng tháng `feeDay`.
+ * Ngày thu đầu tiên sau ngày chốt số của kỳ (ví dụ chốt ngày 20, thu ngày 6 thì thu ngày 6 tháng sau).
+ */
+export function feeDueDate(period: string, billingDay: number, feeDay: number): string {
+  const [y, m] = period.split("-").map(Number);
+  const f = Math.min(Math.max(feeDay, 1), 31);
+  if (f > billingDay) return dmy(clampDay(y, m, f));
+  const [ny, nm] = shiftPeriod(period, 1).split("-").map(Number);
+  return dmy(clampDay(ny, nm, f));
 }
 
 /** "2026-11-20" -> "20/11" */

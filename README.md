@@ -61,6 +61,10 @@ Hãy lưu đường dẫn này vào bookmark. Quên thì xem lại biến `ADMIN
 
 - **Điện** = (số cuối − số đầu) × giá điện/kWh.
 - **Nước** theo số người: định mức = số người × số khối nước định mức cho mỗi người. Phần trong định mức tính giá rẻ, phần vượt tính giá cao.
+- **Hai đợt thu riêng**:
+  - *Tiền trọ* thu vào ngày vào ở của từng phòng (thu sau: tiền trọ kỳ 15/10 – 14/11 thu ngày 15/11). Công bố riêng, không cần số điện nước. Mã chuyển khoản dạng `TIỀNTỐ_PHÒNG_TIENTRO_MM/YYYY`.
+  - *Chi phí khác* (điện, nước, phí, phát sinh) thu một ngày cố định hằng tháng, đặt ở Cài đặt (mặc định ngày 6; là ngày thu đầu tiên sau ngày chốt số). Mã chuyển khoản dạng `TIỀNTỐ_PHÒNG_MM/YYYY`.
+  - Mỗi đợt tự khớp SePay, đánh dấu đã thu và hiển thị QR riêng.
 - **Phí khác** (rác, wifi, gửi xe...): thêm/bớt trong Cài đặt; mỗi phòng bật/tắt và đặt mức riêng ở mục Phòng. Phí bằng 0 không hiện.
 - **Khoản phát sinh** theo tháng, cho phép số âm để giảm trừ.
 - Số đầu kỳ tự lấy từ số cuối kỳ trước. Hóa đơn lưu bản chụp giá: lưu Cài đặt sẽ áp giá mới ngay cho hóa đơn tháng hiện tại chưa công bố, còn hóa đơn đã công bố giữ nguyên giá cũ.

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 export function PaymentWatcher({
   token,
   invoiceId,
+  part = "other",
   paid,
   received,
   seconds = 10,
@@ -17,6 +18,8 @@ export function PaymentWatcher({
 }: {
   token: string;
   invoiceId: number;
+  /** Đợt thu đang theo dõi: tiền trọ hoặc chi phí khác. */
+  part?: "rent" | "other";
   paid: boolean;
   received: number;
   seconds?: number;
@@ -47,7 +50,7 @@ export function PaymentWatcher({
         setMsg("");
       }
       try {
-        const r = await fetch(`/api/p/${token}/status?inv=${invoiceId}`, { cache: "no-store" });
+        const r = await fetch(`/api/p/${token}/status?inv=${invoiceId}&part=${part}`, { cache: "no-store" });
         if (!r.ok || stop) {
           if (manual) setMsg("Không kiểm tra được lúc này. Hãy thử lại sau.");
           return;
@@ -77,7 +80,7 @@ export function PaymentWatcher({
       clearInterval(id);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [token, invoiceId, paid, seconds, router]);
+  }, [token, invoiceId, part, paid, seconds, router]);
 
   return (
     <>

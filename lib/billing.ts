@@ -33,6 +33,10 @@ export type BillingResult = {
   waterAmount: number;
   feesTotal: number;
   adjustmentsTotal: number;
+  /** Tiền trọ (thu riêng, theo ngày vào ở). */
+  rent: number;
+  /** Chi phí khác: điện + nước + phí + phát sinh (thu riêng, theo ngày cố định). */
+  othersTotal: number;
   total: number;
   /** Đã có đủ số điện và số nước hợp lệ, có thể công bố. */
   complete: boolean;
@@ -61,7 +65,8 @@ export function computeInvoice(i: BillingInput): BillingResult {
 
   const feesTotal = i.fees.reduce((s, f) => s + f.amount, 0);
   const adjustmentsTotal = i.adjustments.reduce((s, f) => s + f.amount, 0);
-  const total = i.rent + elecAmount + waterAmount + feesTotal + adjustmentsTotal;
+  const othersTotal = elecAmount + waterAmount + feesTotal + adjustmentsTotal;
+  const total = i.rent + othersTotal;
 
   return {
     elecState,
@@ -77,6 +82,8 @@ export function computeInvoice(i: BillingInput): BillingResult {
     waterAmount,
     feesTotal,
     adjustmentsTotal,
+    rent: i.rent,
+    othersTotal,
     total,
     complete: elecState === "ok" && waterState === "ok",
   };

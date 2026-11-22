@@ -4,7 +4,8 @@ import { SendLink } from "@/components/SendLink";
 import {
   moneyD,
   currentPeriod,
-  dueDate,
+  feeDueDate,
+  rentDueDate,
   isPeriod,
   periodLabel,
   shiftPeriod,
@@ -22,20 +23,58 @@ import {
 } from "@/lib/queries";
 import {
   publishAllAction,
+  publishRentAction,
   publishRoomAction,
   setPaidAction,
+  unpublishRentAction,
 } from "./actions";
 
 export const metadata = { title: "Tổng quan tháng" };
 
 type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 
-function statusOf(room: Room, inv: Invoice | undefined): Status {
+/** Một đợt thu của phòng: tiền trọ (thu theo ngày vào ở) hoặc chi phí khác (thu ngày cố định). */
+type PartInfo = {
+  key: "rent" | "other";
+  label: string;
+  status: Status;
+  amount: number | null;
+  due: string;
+};
+
+function rentPart(room: Room, inv: Invoice | undefined, period: string): PartInfo | null {
+  const amount = inv?.rent ?? room.rent;
+  if (amount <= 0) return null;
+  const status: Status = !inv?.rent_published ? "draft" : inv.rent_paid_at ? "paid" : "unpaid";
+  return {
+    key: "rent",
+    label: "Tiền trọ",
+    status,
+    amount,
+    due: rentDueDate(period, room.move_in_date, room.billing_day),
+  };
+}
+
+function otherPart(room: Room, inv: Invoice | undefined, period: string, feeDay: number): PartInfo {
+  const res = inv ? invoiceResult(inv) : null;
+  const status: Status =
+    !inv || !res?.complete ? "pending" : !inv.published ? "draft" : inv.paid_at ? "paid" : "unpaid";
+  return {
+    key: "other",
+    label: "Điện, nước, phí khác",
+    status,
+    amount: res?.complete ? res.othersTotal : null,
+    due: feeDueDate(period, room.billing_day, feeDay),
+  };
+}
+
+/** Trạng thái chung của phòng (để tô màu): việc cần làm nhất hiện lên trước. */
+function roomStatus(room: Room, parts: PartInfo[]): Status {
   if (room.is_vacant) return "vacant";
-  if (!inv) return "pending";
-  if (!invoiceResult(inv).complete) return "pending";
-  if (!inv.published) return "draft";
-  return inv.paid_at ? "paid" : "unpaid";
+  for (const st of ["unpaid", "draft", "pending"] as const) {
+    if (parts.some((p) => p.status === st)) return st;
+  }
+  return "paid";
 }
 
 const ST: Record<Status, { label: string; badge: string; text: string }> = {
@@ -80,6 +119,13 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
   let expected = 0;
   let collected = 0;
+  const countAny: Record<Status, number> = {
+    vacant: 0,
+    pending: 0,
+    draft: 0,
+    unpaid: 0,
+    paid: 0,
+  };
   const count: Record<Status, number> = {
     vacant: 0,
     pending: 0,
@@ -96,16 +142,23 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   };
   const rows = rooms.map((room) => {
     const inv = byRoom.get(room.id);
-    const status = statusOf(room, inv);
+    const parts: PartInfo[] = room.is_vacant
+      ? []
+      : [rentPart(room, inv, period), otherPart(room, inv, period, settings.fee_day)].filter(
+          (p): p is PartInfo => p !== null,
+        );
+    const status = roomStatus(room, parts);
     const res = inv ? invoiceResult(inv) : null;
-    const total = res && res.complete ? res.total : null;
-    if (inv && res && total !== null) {
-      expected += total;
-      sum[status] += total;
-      if (status === "paid") collected += total;
+    for (const p of parts) {
+      if (p.amount === null) continue;
+      expected += p.amount;
+      sum[p.status] += p.amount;
+      if (p.status === "paid") collected += p.amount;
     }
-    count[status]++;
-    return { room, inv, status, res, total };
+    count[status] = (count[status] ?? 0) + 1;
+    // Số phòng theo từng trạng thái (phòng có đợt thu nào ở trạng thái đó)
+    for (const st of new Set(parts.map((p) => p.status))) countAny[st]++;
+    return { room, inv, status, res, parts };
   });
 
   const remaining = expected - collected;
@@ -114,7 +167,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
   const v = first(sp.v);
   const view: Filter = FILTERS.find((f) => f === v) ?? "all";
-  const shown = view === "all" ? rows : rows.filter((r) => r.status === view);
+  const shown = view === "all" ? rows : rows.filter((r) => r.parts.some((p) => p.status === view));
   const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
 
   return (
@@ -202,7 +255,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
             <span className="text-xl font-bold leading-tight text-ink">
               {moneyShort(sum[k])}
             </span>
-            <span className="text-sm text-muted">{count[k]} phòng</span>
+            <span className="text-sm text-muted">{countAny[k]} phòng</span>
           </Link>
         ))}
       </section>
@@ -221,20 +274,21 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
           ) : null}
         </div>
 
-        {count.draft > 1 ? (
+        {rows.filter((r) => r.parts.some((p) => p.key === "other" && p.status === "draft")).length > 1 ? (
           <form action={publishAllAction}>
             <input type="hidden" name="period" value={period} />
             <input type="hidden" name="back" value={back} />
             <button type="submit" className="btn-primary w-full">
-              Công bố tất cả ({count.draft} phòng)
+              Công bố điện, nước tất cả ({rows.filter((r) => r.parts.some((p) => p.key === "other" && p.status === "draft")).length} phòng)
             </button>
           </form>
         ) : null}
 
         <ul className="card divide-y divide-line overflow-hidden !p-0">
-          {shown.map(({ room, inv, status, res, total }) => {
+          {shown.map(({ room, inv, status, res, parts }) => {
             const s = ST[status];
-            const got = inv ? (received.get(inv.id) ?? 0) : 0;
+            const got = inv ? (received.get(inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 };
+            const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
             const hidden = { room: room.id, period, back };
             const head = (
               <>
@@ -254,7 +308,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                     {s.label}
                   </span>
                 </span>
-                {total !== null ? (
+                {total > 0 ? (
                   <span className="shrink-0 whitespace-nowrap text-right font-bold">
                     {moneyD(total)}
                   </span>
@@ -287,81 +341,125 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                   </summary>
 
                   <div className="flex flex-col gap-3 px-4 pb-4">
-                    {inv && res && total !== null ? (
-                      <dl className="flex flex-col gap-1">
-                        {(
-                          [
-                            ["Tiền phòng", moneyD(inv.rent)],
-                            ["Điện (" + res.kwh + " kWh)", moneyD(res.elecAmount)],
-                            ["Nước (" + res.m3 + " m³)", moneyD(res.waterAmount)],
-                            [
-                              "Phí khác",
-                              moneyD(res.feesTotal + res.adjustmentsTotal),
-                            ],
-                          ] as const
-                        ).map(([label, val]) => (
-                          <div key={label} className="flex justify-between gap-3">
-                            <dt className="text-muted">{label}</dt>
-                            <dd className="font-semibold">{val}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : null}
-
-                    {status === "draft" || status === "unpaid" ? (
-                      <p className="text-sm text-muted">
-                        Hạn đóng{" "}
-                        {dueDate(period, room.billing_day, settings.due_days)}
-                        {got > 0 && total !== null ? (
-                          <span className="font-medium text-ok">
-                            {" "}
-                            · Đã nhận {moneyD(got)}
-                            {got < total ? `, còn ${moneyD(total - got)}` : ""}
-                          </span>
-                        ) : null}
-                      </p>
-                    ) : null}
-
-                    {status === "pending" ? (
-                      <Link
-                        href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                        className="btn-primary w-full"
-                      >
-                        Nhập số điện, nước
-                      </Link>
-                    ) : null}
-
-                    {status === "draft" ? (
-                      <form action={publishRoomAction}>
-                        <Hidden {...hidden} />
-                        <button type="submit" className="btn-primary w-full">
-                          Công bố cho người thuê
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {status === "unpaid" ? (
-                      <div className="flex flex-wrap gap-2">
-                        <form
-                          action={setPaidAction}
-                          className="min-w-0 flex-1 basis-40"
+                    {parts.map((p) => {
+                      const ps = ST[p.status];
+                      const rcv = got[p.key];
+                      return (
+                        <div
+                          key={p.key}
+                          className="flex flex-col gap-2 rounded-xl border border-line p-3"
                         >
-                          <Hidden {...hidden} />
-                          <input type="hidden" name="paid" value="1" />
-                          <button type="submit" className="btn-primary w-full">
-                            Đã thu tiền
-                          </button>
-                        </form>
-                        {inv && total !== null ? (
-                          <SendLink
-                            compact
-                            path={`/p/${room.token}`}
-                            phone={room.tenant_phone.replace(/\D/g, "")}
-                            message={`Chào ${room.tenant_name || "bạn"}, hóa đơn ${room.name} tháng ${periodLabel(period)} là ${moneyD(total)}. Xem chi tiết tại: {link}`}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold">{p.label}</p>
+                              <p className="text-sm text-muted">Hạn thu {p.due}</p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              {p.amount !== null ? (
+                                <p className="font-bold">{moneyD(p.amount)}</p>
+                              ) : null}
+                              <p className={`text-sm font-semibold ${ps.text}`}>
+                                {p.key === "rent" && p.status === "draft"
+                                  ? "Chưa công bố"
+                                  : ps.label}
+                              </p>
+                            </div>
+                          </div>
+
+                          {p.key === "other" && inv && res && p.amount !== null ? (
+                            <dl className="flex flex-col gap-1 text-sm">
+                              {(
+                                [
+                                  ["Điện (" + res.kwh + " kWh)", moneyD(res.elecAmount)],
+                                  ["Nước (" + res.m3 + " m³)", moneyD(res.waterAmount)],
+                                  [
+                                    "Phí khác",
+                                    moneyD(res.feesTotal + res.adjustmentsTotal),
+                                  ],
+                                ] as const
+                              ).map(([label, val]) => (
+                                <div key={label} className="flex justify-between gap-3">
+                                  <dt className="text-muted">{label}</dt>
+                                  <dd className="font-semibold">{val}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ) : null}
+
+                          {(p.status === "draft" || p.status === "unpaid") &&
+                          rcv > 0 &&
+                          p.amount !== null ? (
+                            <p className="text-sm font-medium text-ok">
+                              Đã nhận {moneyD(rcv)}
+                              {rcv < p.amount ? `, còn ${moneyD(p.amount - rcv)}` : ""}
+                            </p>
+                          ) : null}
+
+                          {p.key === "other" && p.status === "pending" ? (
+                            <Link
+                              href={`/admin/nhap-so?m=${period}&room=${room.id}`}
+                              className="btn-primary w-full"
+                            >
+                              Nhập số điện, nước
+                            </Link>
+                          ) : null}
+
+                          {p.status === "draft" ? (
+                            <form action={p.key === "rent" ? publishRentAction : publishRoomAction}>
+                              <Hidden {...hidden} />
+                              <button type="submit" className="btn-primary w-full">
+                                {p.key === "rent"
+                                  ? "Công bố tiền trọ cho người thuê"
+                                  : "Công bố cho người thuê"}
+                              </button>
+                            </form>
+                          ) : null}
+
+                          {p.status === "unpaid" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <form
+                                action={setPaidAction}
+                                className="min-w-0 flex-1 basis-40"
+                              >
+                                <Hidden {...hidden} />
+                                <input type="hidden" name="part" value={p.key} />
+                                <input type="hidden" name="paid" value="1" />
+                                <button type="submit" className="btn-primary w-full">
+                                  Đã thu {p.key === "rent" ? "tiền trọ" : "chi phí khác"}
+                                </button>
+                              </form>
+                              {inv && p.amount !== null ? (
+                                <SendLink
+                                  compact
+                                  path={`/p/${room.token}`}
+                                  phone={room.tenant_phone.replace(/\D/g, "")}
+                                  message={`Chào ${room.tenant_name || "bạn"}, ${p.key === "rent" ? "tiền trọ" : "tiền điện, nước và các chi phí khác"} ${room.name} tháng ${periodLabel(period)} là ${moneyD(p.amount)}, hạn ${p.due}. Xem chi tiết tại: {link}`}
+                                />
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          {p.status === "paid" || (p.key === "rent" && p.status === "unpaid") ? (
+                            <form
+                              action={
+                                p.status === "paid" ? setPaidAction : unpublishRentAction
+                              }
+                            >
+                              <Hidden {...hidden} />
+                              {p.status === "paid" ? (
+                                <>
+                                  <input type="hidden" name="part" value={p.key} />
+                                  <input type="hidden" name="paid" value="0" />
+                                </>
+                              ) : null}
+                              <button type="submit" className="btn-ghost w-full">
+                                {p.status === "paid" ? "Bỏ đánh dấu đã thu" : "Hủy công bố tiền trọ"}
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
+                      );
+                    })}
 
                     <Link
                       href={`/admin/nhap-so?m=${period}&room=${room.id}`}

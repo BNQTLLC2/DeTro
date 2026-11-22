@@ -382,9 +382,11 @@ export default async function EnterReadings({
 
       <section className="card flex flex-col gap-2">
         <h3 className="text-base font-bold">
-          Tạm tính hóa đơn {selected.name}
+          Tạm tính chi phí khác {selected.name}
         </h3>
-        <Row label="Tiền phòng" value={moneyD(inv?.rent ?? selected.rent)} />
+        <p className="text-sm text-muted">
+          Tiền trọ ({moneyD(inv?.rent ?? selected.rent)}) thu riêng theo ngày vào ở, công bố ở trang Tổng quan.
+        </p>
         <Row
           label="Tiền điện"
           value={res.elecState === "ok" ? moneyD(res.elecAmount) : "Chưa nhập"}
@@ -403,13 +405,13 @@ export default async function EnterReadings({
         ))}
         <div className="flex items-baseline justify-between border-t border-line pt-2">
           <span className="font-semibold">
-            {res.complete ? "Tổng cộng" : "Tạm tính (chưa đủ)"}
+            {res.complete ? "Tổng chi phí khác" : "Tạm tính (chưa đủ)"}
           </span>
-          <span className="text-xl font-bold">{moneyD(res.total)}</span>
+          <span className="text-xl font-bold">{moneyD(res.othersTotal)}</span>
         </div>
         <p className="text-sm text-muted">
           {published
-            ? "Người thuê đang xem được hóa đơn này."
+            ? "Người thuê đang xem được điện, nước và các phí này."
             : res.complete
               ? "Đã đủ số điện và nước. Người thuê chưa thấy gì cho đến khi bạn bấm công bố."
               : "Cần lưu đủ số điện và số nước mới công bố được."}

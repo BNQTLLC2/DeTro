@@ -87,13 +87,35 @@ export async function publishAllAction(fd: FormData) {
   });
 }
 
+/** Công bố / hủy công bố tiền trọ (đợt thu riêng, không cần số điện nước). */
+export async function publishRentAction(fd: FormData) {
+  await requireAdmin();
+  const back = safeBack(fd);
+  const roomId = intOf(fd, "room");
+  await run(back, "Đã công bố tiền trọ. Người thuê đã xem được và chuyển khoản.", async () => {
+    await Q.publishRent(roomId, periodOf(fd));
+  });
+}
+
+export async function unpublishRentAction(fd: FormData) {
+  await requireAdmin();
+  const back = safeBack(fd);
+  const roomId = intOf(fd, "room");
+  await run(back, "Đã hủy công bố tiền trọ.", async () => {
+    await Q.unpublishRent(roomId, periodOf(fd));
+  });
+}
+
+/** Đánh dấu đã thu một đợt: part = "rent" (tiền trọ) hoặc "other" (chi phí khác, mặc định). */
 export async function setPaidAction(fd: FormData) {
   await requireAdmin();
   const back = safeBack(fd);
   const roomId = intOf(fd, "room");
   const paid = str(fd, "paid") === "1";
-  await run(back, paid ? "Đã đánh dấu đã thu." : "Đã bỏ đánh dấu đã thu.", async () => {
-    await Q.setPaid(roomId, periodOf(fd), paid);
+  const part = str(fd, "part") === "rent" ? "rent" : "other";
+  const what = part === "rent" ? "tiền trọ" : "chi phí khác";
+  await run(back, paid ? `Đã đánh dấu đã thu ${what}.` : `Đã bỏ đánh dấu đã thu ${what}.`, async () => {
+    await Q.setPaid(roomId, periodOf(fd), paid, part);
   });
 }
 
@@ -210,13 +232,15 @@ export async function saveSettingsAction(fd: FormData) {
   await run("/admin/cai-dat", "", async () => {
     const quota = numOf(fd, "water_quota");
     if (quota === null || quota < 0) throw new Error("Số khối nước định mức không hợp lệ.");
+    const feeDay = intOf(fd, "fee_day", 6);
+    if (feeDay < 1 || feeDay > 31) throw new Error("Ngày thu chi phí khác phải từ 1 đến 31.");
     await Q.saveSettings({
       house_name: str(fd, "house_name") || "Nhà trọ",
       elec_price: Math.max(intOf(fd, "elec_price"), 0),
       water_quota: quota,
       water_low: Math.max(intOf(fd, "water_low"), 0),
       water_high: Math.max(intOf(fd, "water_high"), 0),
-      due_days: Math.max(intOf(fd, "due_days", 5), 0),
+      fee_day: feeDay,
     });
     // Giá mới áp dụng luôn cho hóa đơn tháng hiện tại (chưa công bố).
     const period = currentPeriod();

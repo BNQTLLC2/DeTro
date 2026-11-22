@@ -7,7 +7,9 @@ import { FontSizeToggle } from "@/components/FontSizeToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   dmy,
-  dueDate,
+  feeDueDate,
+  rentDueDate,
+  rentRange,
   moneyD,
   money,
   periodLabel,
@@ -21,11 +23,11 @@ import {
   getRoomByToken,
   getSettings,
   invoiceResult,
-  listPublishedInvoices,
+  listVisibleInvoices,
   receivedFor,
   type Invoice,
 } from "@/lib/queries";
-import { paymentContent, sepayQrUrl } from "@/lib/sepay";
+import { paymentContent, sepayQrUrl, type PaymentPart } from "@/lib/sepay";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,7 @@ export default async function TenantPage({
   const room = await getRoomByToken(token);
   if (!room) notFound();
 
-  const [settings, invoices] = await Promise.all([getSettings(), listPublishedInvoices(room.id)]);
+  const [settings, invoices] = await Promise.all([getSettings(), listVisibleInvoices(room.id)]);
 
   const header = (
     <header className="mb-4 flex items-start justify-between gap-3">
@@ -83,36 +85,72 @@ export default async function TenantPage({
   const idx = isPeriod(m) ? invoices.findIndex((i) => i.period === m) : -1;
   const selIdx = idx >= 0 ? idx : invoices.length - 1;
   const inv = invoices[selIdx];
-  const prev: Invoice | undefined = invoices[selIdx - 1];
+  // Hai đợt thu độc lập: tiền trọ (công bố riêng) và chi phí khác (điện, nước, phí, phát sinh)
+  const rentShown = inv.rent_published && inv.rent > 0;
+  const otherShown = inv.published;
+  const rentPaid = !!inv.rent_paid_at;
+  const otherPaid = !!inv.paid_at;
+  const publishedList = invoices.filter((i) => i.published);
+  const prev: Invoice | undefined = [...publishedList].reverse().find((i) => i.period < inv.period);
   const res = invoiceResult(inv);
   const prevRes = prev ? invoiceResult(prev) : null;
-  const paid = !!inv.paid_at;
 
   // Các phần của tổng tiền, bỏ khoản bằng 0
   const parts = [
-    { name: "Tiền phòng", amount: inv.rent, color: "var(--c-rent)" },
-    { name: "Tiền điện", amount: res.elecAmount, color: "var(--c-elec)" },
-    { name: "Tiền nước", amount: res.waterAmount, color: "var(--c-water)" },
-    ...inv.fees.map((f) => ({ name: f.name, amount: f.amount, color: "var(--c-trash)", detail: f.detail })),
+    ...(rentShown ? [{ name: "Tiền trọ", amount: inv.rent, color: "var(--c-rent)" }] : []),
+    ...(otherShown
+      ? [
+          { name: "Tiền điện", amount: res.elecAmount, color: "var(--c-elec)" },
+          { name: "Tiền nước", amount: res.waterAmount, color: "var(--c-water)" },
+          ...inv.fees.map((f) => ({ name: f.name, amount: f.amount, color: "var(--c-trash)", detail: f.detail })),
+        ]
+      : []),
   ].filter((p) => p.amount > 0);
   const partsTotal = parts.reduce((s, p) => s + p.amount, 0);
 
-  const last6 = invoices.slice(-6);
+  const last6 = publishedList.slice(-6);
   const chartData = last6.map((i) => ({ i, r: invoiceResult(i) }));
 
-  // Thanh toán: QR SePay, số tiền = còn thiếu (trừ phần đã nhận), nội dung có mã hóa đơn để tự khớp
-  const received = paid ? 0 : await receivedFor(inv.id);
-  const remaining = Math.max(res.total - received, 0);
-  const qrReady = !paid && settings.bank_code !== "" && settings.bank_account !== "";
-  const content = paymentContent(settings.sepay_prefix, room.name, inv.period);
-  const qrOpts = { account: settings.bank_account, bank: settings.bank_code, amount: remaining, content };
-  const qrUrl = qrReady ? sepayQrUrl(qrOpts) : "";
-  const qrDownloadUrl = qrReady ? sepayQrUrl({ ...qrOpts, download: true }) : "";
+  // Thanh toán: mỗi đợt một QR SePay, số tiền = còn thiếu, nội dung có mã riêng từng đợt để tự khớp
+  const bankReady = settings.bank_code !== "" && settings.bank_account !== "";
   const autoConfirm = !!process.env.SEPAY_API_KEY;
+  const payInfo = async (part: PaymentPart, total: number, paid: boolean) => {
+    const received = paid ? 0 : await receivedFor(inv.id, part);
+    const remaining = Math.max(total - received, 0);
+    const content = paymentContent(settings.sepay_prefix, room.name, inv.period, part);
+    const qrReady = !paid && bankReady;
+    const opts = { account: settings.bank_account, bank: settings.bank_code, amount: remaining, content };
+    return {
+      part,
+      invoiceId: inv.id,
+      paid,
+      received,
+      remaining,
+      content,
+      qrReady,
+      qrUrl: qrReady ? sepayQrUrl(opts) : "",
+      qrDownloadUrl: qrReady ? sepayQrUrl({ ...opts, download: true }) : "",
+    };
+  };
+  const rentPay = rentShown ? await payInfo("rent", inv.rent, rentPaid) : null;
+  const otherPay = otherShown ? await payInfo("other", res.othersTotal, otherPaid) : null;
+  const invState = (i: Invoice) => {
+    const rentOpen = i.rent_published && i.rent > 0 && !i.rent_paid_at;
+    const otherOpen = i.published && !i.paid_at;
+    return rentOpen || otherOpen;
+  };
+  const invAmount = (i: Invoice) => {
+    const r = invoiceResult(i);
+    return (i.rent_published ? i.rent : 0) + (i.published ? r.othersTotal : 0);
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
-      {qrReady ? null : <PaymentWatcher token={token} invoiceId={inv.id} paid={paid} received={received} />}
+      {[rentPay, otherPay].map((p) =>
+        p && !p.qrReady ? (
+          <PaymentWatcher key={p.part} token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} />
+        ) : null,
+      )}
       {header}
 
       {/* Chọn tháng */}
@@ -133,33 +171,41 @@ export default async function TenantPage({
                 }`}
               >
                 <span className="text-sm font-bold">Tháng {Number(i.period.split("-")[1])}</span>
-                <span className="text-xs font-medium">{i.paid_at ? "Đã đóng" : "Chưa đóng"}</span>
+                <span className="text-xs font-medium">{invState(i) ? "Chưa đóng" : "Đã đóng"}</span>
               </Link>
             );
           })}
         </div>
       </section>
 
-      {/* Tổng tiền */}
-      <section className="card flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm text-muted">Tổng tiền {periodName(inv.period)}</p>
-          <span className={`chip ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
-            {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
-          </span>
-        </div>
-        <p className="text-4xl font-bold leading-tight">{moneyD(res.total)}</p>
-        <p className="text-sm text-muted">Kỳ tính: {periodRange(inv.period, room.billing_day)}</p>
-        {paid ? (
-          <p className="text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(inv.paid_at + "T00:00:00Z"))}</p>
-        ) : (
-          <p className="text-sm font-semibold text-bad">
-            Hạn đóng tiền: {dueDate(inv.period, room.billing_day, settings.due_days)}
-          </p>
-        )}
-      </section>
+      {/* Hai đợt thu */}
+      {rentShown ? (
+        <CollectCard
+          title={`Tiền trọ ${periodName(inv.period)}`}
+          amount={inv.rent}
+          paid={rentPaid}
+          paidAt={inv.rent_paid_at}
+          range={`Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`}
+          due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
+        />
+      ) : null}
+      {otherShown ? (
+        <CollectCard
+          title={`Điện, nước và các phí khác ${periodName(inv.period)}`}
+          amount={res.othersTotal}
+          paid={otherPaid}
+          paidAt={inv.paid_at}
+          range={`Kỳ tính: ${periodRange(inv.period, room.billing_day)}`}
+          due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
+        />
+      ) : (
+        <section className="card text-sm text-muted">
+          Điện, nước và các phí khác của {periodName(inv.period)} chưa được công bố. Khi chủ trọ chốt số và công bố, bạn sẽ thấy ở đây.
+        </section>
+      )}
 
       {/* Tiền đi vào đâu */}
+      {parts.length > 0 ? (
       <section className="card flex flex-col gap-3">
         <div>
           <h2 className="text-lg font-bold">Tiền của bạn đi vào đâu?</h2>
@@ -191,7 +237,7 @@ export default async function TenantPage({
               <span className="min-w-24 text-right font-semibold">{moneyD(p.amount)}</span>
             </li>
           ))}
-          {inv.adjustments.map((a, i) => (
+          {(otherShown ? inv.adjustments : []).map((a, i) => (
             <li key={`adj${i}`} className="flex items-center gap-3 border-t border-line py-2.5">
               <span className="flex-1 font-medium">{a.name}</span>
               <span className="min-w-24 text-right font-semibold">{moneyD(a.amount)}</span>
@@ -199,9 +245,10 @@ export default async function TenantPage({
           ))}
         </ul>
       </section>
+      ) : null}
 
       {/* Điện */}
-      {res.elecAmount > 0 ? (
+      {otherShown && res.elecAmount > 0 ? (
         <section className="card flex flex-col gap-4">
           <SectionHead
             title="Tiền điện"
@@ -242,7 +289,7 @@ export default async function TenantPage({
       ) : null}
 
       {/* Nước */}
-      {res.waterAmount > 0 ? (
+      {otherShown && res.waterAmount > 0 ? (
         <section className="card flex flex-col gap-4">
           <SectionHead
             title="Tiền nước"
@@ -291,53 +338,57 @@ export default async function TenantPage({
         </section>
       ) : null}
 
-      {/* Chuyển khoản */}
-      {qrReady ? (
-        <section className="card flex flex-col items-center gap-3">
-          
-          <h2 className="self-start text-lg font-bold">Chuyển khoản</h2>
-          {received > 0 ? (
-            <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
-              Đã nhận {moneyD(received)}. Còn thiếu {moneyD(remaining)}.
-            </p>
-          ) : null}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qrUrl}
-            alt={`Mã QR chuyển khoản ${moneyD(remaining)} nội dung ${content}`}
-            width={260}
-            height={260}
-            className="rounded-xl bg-white"
-          />
-          <a href={qrDownloadUrl} download className="btn-ghost w-full">
-            Tải mã QR về máy
-          </a>
-          <dl className="grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-muted">Ngân hàng</dt>
-            <dd className="text-right font-semibold">{settings.bank_code}</dd>
-            <dt className="text-muted">Số tài khoản</dt>
-            <dd className="text-right font-semibold">{settings.bank_account}</dd>
-            {settings.bank_holder ? (
-              <>
-                <dt className="text-muted">Chủ tài khoản</dt>
-                <dd className="text-right font-semibold">{settings.bank_holder}</dd>
-              </>
+      {/* Chuyển khoản: mỗi đợt thu một mã QR và nội dung riêng */}
+      {[
+        { p: rentPay, title: "Chuyển khoản tiền trọ" },
+        { p: otherPay, title: "Chuyển khoản điện, nước và các phí khác" },
+      ].map(({ p, title }) =>
+        p && p.qrReady ? (
+          <section key={p.part} className="card flex flex-col items-center gap-3">
+            <h2 className="self-start text-lg font-bold">{title}</h2>
+            {p.received > 0 ? (
+              <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
+                Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
+              </p>
             ) : null}
-            <dt className="text-muted">Số tiền</dt>
-            <dd className="text-right font-semibold">{moneyD(remaining)}</dd>
-            <dt className="text-muted">Nội dung</dt>
-            <dd className="text-right font-semibold">{content}</dd>
-          </dl>
-          <CopyTextButton text={content} label="Sao chép nội dung chuyển khoản" />
-          <PaymentWatcher token={token} invoiceId={inv.id} paid={paid} received={received} showButton />
-          <p className="text-center text-xs leading-5 text-muted">
-            Hãy giữ nguyên nội dung chuyển khoản.{" "}
-            {autoConfirm
-              ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
-              : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
-          </p>
-        </section>
-      ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={p.qrUrl}
+              alt={`Mã QR chuyển khoản ${moneyD(p.remaining)} nội dung ${p.content}`}
+              width={260}
+              height={260}
+              className="rounded-xl bg-white"
+            />
+            <a href={p.qrDownloadUrl} download className="btn-ghost w-full">
+              Tải mã QR về máy
+            </a>
+            <dl className="grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-muted">Ngân hàng</dt>
+              <dd className="text-right font-semibold">{settings.bank_code}</dd>
+              <dt className="text-muted">Số tài khoản</dt>
+              <dd className="text-right font-semibold">{settings.bank_account}</dd>
+              {settings.bank_holder ? (
+                <>
+                  <dt className="text-muted">Chủ tài khoản</dt>
+                  <dd className="text-right font-semibold">{settings.bank_holder}</dd>
+                </>
+              ) : null}
+              <dt className="text-muted">Số tiền</dt>
+              <dd className="text-right font-semibold">{moneyD(p.remaining)}</dd>
+              <dt className="text-muted">Nội dung</dt>
+              <dd className="text-right font-semibold">{p.content}</dd>
+            </dl>
+            <CopyTextButton text={p.content} label="Sao chép nội dung chuyển khoản" />
+            <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
+            <p className="text-center text-xs leading-5 text-muted">
+              Hãy giữ nguyên nội dung chuyển khoản (mỗi khoản có nội dung riêng, đừng chuyển gộp).{" "}
+              {autoConfirm
+                ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
+                : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
+            </p>
+          </section>
+        ) : null,
+      )}
 
       {/* Thống kê */}
       {chartData.length >= 2 ? (
@@ -393,10 +444,10 @@ export default async function TenantPage({
               >
                 <span>
                   <span className="block font-semibold">Tháng {periodLabel(i.period)}</span>
-                  <span className="block text-sm text-muted">{moneyD(invoiceResult(i).total)}</span>
+                  <span className="block text-sm text-muted">{moneyD(invAmount(i))}</span>
                 </span>
-                <span className={`chip ${i.paid_at ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
-                  {i.paid_at ? "Đã đóng" : "Chưa đóng"}
+                <span className={`chip ${invState(i) ? "bg-bad-bg text-bad" : "bg-ok-bg text-ok"}`}>
+                  {invState(i) ? "Chưa đóng" : "Đã đóng"}
                 </span>
               </Link>
             </li>
@@ -404,6 +455,40 @@ export default async function TenantPage({
         </ul>
       </section>
     </main>
+  );
+}
+
+function CollectCard({
+  title,
+  amount,
+  paid,
+  paidAt,
+  range,
+  due,
+}: {
+  title: string;
+  amount: number;
+  paid: boolean;
+  paidAt: string | null;
+  range: string;
+  due: string;
+}) {
+  return (
+    <section className="card flex flex-col gap-1">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-muted">{title}</p>
+        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
+          {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
+        </span>
+      </div>
+      <p className="text-4xl font-bold leading-tight">{moneyD(amount)}</p>
+      <p className="text-sm text-muted">{range}</p>
+      {paid && paidAt ? (
+        <p className="text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
+      ) : (
+        <p className="text-sm font-semibold text-bad">Hạn đóng tiền: {due}</p>
+      )}
+    </section>
   );
 }
 
