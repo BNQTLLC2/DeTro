@@ -265,9 +265,7 @@ export default async function EnterReadings({
                   <ConfirmButton
                     message={`Xóa "${f.name}" khỏi tất cả các phòng? Hóa đơn đã công bố không bị ảnh hưởng.`}
                     className="btn-ghost !min-h-9 shrink-0 !px-3 text-sm"
-                    formAction={deleteFeeTypeAction}
-                    name="id"
-                    value={f.id}
+                    formAction={deleteFeeTypeAction.bind(null, f.id)}
                   >
                     Xóa
                   </ConfirmButton>

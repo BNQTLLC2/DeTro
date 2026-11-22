@@ -284,13 +284,17 @@ export async function updateFeeTypeAction(fd: FormData) {
   });
 }
 
-export async function deleteFeeTypeAction(fd: FormData) {
+/** Xóa một loại phí khỏi mọi phòng. `id` được gắn sẵn bằng bind ở nút Xóa. */
+export async function deleteFeeTypeAction(id: number, fd: FormData) {
   await requireAdmin();
-  const id = intOf(fd, "id");
   const roomId = intOf(fd, "room");
   const period = str(fd, "period");
   await run(safeBack(fd, "/admin/phong"), "Đã xóa loại phí khỏi tất cả các phòng. Hóa đơn đã công bố không bị ảnh hưởng.", async () => {
     await Q.deleteFeeType(id);
-    if (roomId && isPeriod(period)) await Q.refreshInvoiceFees(roomId, period);
+    // Hóa đơn chưa công bố thì cập nhật theo danh sách phí mới; hóa đơn đã công bố giữ nguyên.
+    if (roomId && isPeriod(period)) {
+      const inv = await Q.getInvoice(roomId, period);
+      if (inv && !inv.published) await Q.refreshInvoiceFees(roomId, period);
+    }
   });
 }
