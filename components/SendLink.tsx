@@ -11,10 +11,13 @@ export function SendLink({
   path,
   phone,
   message,
+  compact = false,
 }: {
   path: string;
   phone: string;
   message: string; // chứa {link} để thay bằng link thật
+  /** Nút phụ nhỏ nằm cạnh nút chính (dùng trong hàng flex-wrap). */
+  compact?: boolean;
 }) {
   const [note, setNote] = useState("");
 
@@ -31,6 +34,25 @@ export function SendLink({
     // Link Zalo dùng đầu số quốc tế: 0912... -> 84912...
     const zaloNumber = phone.startsWith("0") ? "84" + phone.slice(1) : phone;
     window.open(`https://zalo.me/${zaloNumber}`, "_blank", "noopener");
+  }
+
+  if (compact) {
+    return (
+      <>
+        {phone ? (
+          <button type="button" onClick={zalo} className="btn-ghost shrink-0">
+            Gửi Zalo
+          </button>
+        ) : null}
+        {!phone ? (
+          <p className="w-full basis-full text-sm text-muted">
+            Chưa có số điện thoại, thêm ở mục Phòng để gửi link.
+          </p>
+        ) : note ? (
+          <p className="w-full basis-full text-sm text-muted">{note}</p>
+        ) : null}
+      </>
+    );
   }
 
   if (!phone) {

@@ -4,6 +4,7 @@ import { SendLink } from "@/components/SendLink";
 import {
   moneyD,
   currentPeriod,
+  dueDate,
   isPeriod,
   periodLabel,
   shiftPeriod,
@@ -23,7 +24,6 @@ import {
   publishAllAction,
   publishRoomAction,
   setPaidAction,
-  unpublishRoomAction,
 } from "./actions";
 
 export const metadata = { title: "Tổng quan tháng" };
@@ -33,29 +33,26 @@ type Status = "vacant" | "pending" | "draft" | "unpaid" | "paid";
 function statusOf(room: Room, inv: Invoice | undefined): Status {
   if (room.is_vacant) return "vacant";
   if (!inv) return "pending";
-  const complete = invoiceResult(inv).complete;
-  if (!complete) return "pending";
+  if (!invoiceResult(inv).complete) return "pending";
   if (!inv.published) return "draft";
   return inv.paid_at ? "paid" : "unpaid";
 }
 
-const TILE: Record<Status, { label: string; cls: string }> = {
-  vacant: { label: "Trống", cls: "border-dashed border-line text-muted" },
-  pending: {
-    label: "Chưa nhập số",
-    cls: "border-transparent bg-idle-bg text-muted",
+const ST: Record<Status, { label: string; badge: string; text: string }> = {
+  vacant: {
+    label: "Phòng trống",
+    badge: "border-2 border-dashed border-line text-muted",
+    text: "text-muted",
   },
-  draft: {
-    label: "Chờ công bố",
-    cls: "border-transparent bg-warn-bg text-warn",
-  },
-  unpaid: { label: "Chưa thu", cls: "border-transparent bg-bad-bg text-bad" },
-  paid: { label: "Đã thu", cls: "border-transparent bg-ok-bg text-ok" },
+  pending: { label: "Chưa nhập số", badge: "bg-idle-bg text-muted", text: "text-muted" },
+  draft: { label: "Chờ công bố", badge: "bg-warn-bg text-warn", text: "text-warn" },
+  unpaid: { label: "Chưa thu", badge: "bg-bad-bg text-bad", text: "text-bad" },
+  paid: { label: "Đã thu", badge: "bg-ok-bg text-ok", text: "text-ok" },
 };
 
 /** 3.424.500 -> "3,42tr"; 425.000 -> "425k" */
 function moneyShort(n: number): string {
-  if (n >= 1_000_000)
+  if (Math.abs(n) >= 1_000_000)
     return `${(n / 1_000_000)
       .toFixed(2)
       .replace(/\.?0+$/, "")
@@ -63,29 +60,8 @@ function moneyShort(n: number): string {
   return `${Math.round(n / 1000)}k`;
 }
 
-const CHIP: Record<Status, { label: string; cls: string; bar: string }> = {
-  vacant: {
-    label: "Phòng trống",
-    cls: "bg-idle-bg text-muted",
-    bar: "!border-l-line",
-  },
-  pending: {
-    label: "Chưa nhập đủ số",
-    cls: "bg-idle-bg text-muted",
-    bar: "!border-l-c-trash",
-  },
-  draft: {
-    label: "Chờ công bố",
-    cls: "bg-warn-bg text-warn",
-    bar: "!border-l-c-elec",
-  },
-  unpaid: {
-    label: "Chưa thu",
-    cls: "bg-bad-bg text-bad",
-    bar: "!border-l-bad",
-  },
-  paid: { label: "Đã thu", cls: "bg-ok-bg text-ok", bar: "!border-l-ok" },
-};
+type Filter = "all" | "unpaid" | "draft" | "pending" | "paid";
+const FILTERS: Filter[] = ["all", "unpaid", "draft", "pending", "paid"];
 
 export default async function Overview({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -104,224 +80,301 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
   let expected = 0;
   let collected = 0;
-  let draftCount = 0;
-  let pendingCount = 0;
-  let liveCount = 0;
+  const count: Record<Status, number> = {
+    vacant: 0,
+    pending: 0,
+    draft: 0,
+    unpaid: 0,
+    paid: 0,
+  };
+  const sum: Record<Status, number> = {
+    vacant: 0,
+    pending: 0,
+    draft: 0,
+    unpaid: 0,
+    paid: 0,
+  };
   const rows = rooms.map((room) => {
     const inv = byRoom.get(room.id);
     const status = statusOf(room, inv);
     const res = inv ? invoiceResult(inv) : null;
     const total = res && res.complete ? res.total : null;
-    if (total !== null) {
+    if (inv && res && total !== null) {
       expected += total;
+      sum[status] += total;
       if (status === "paid") collected += total;
     }
-    if (status === "draft") draftCount++;
-    if (status === "pending") pendingCount++;
-    if (!room.is_vacant) liveCount++;
+    count[status]++;
     return { room, inv, status, res, total };
   });
-  const todo = rows.filter(
-    (r) => r.status === "draft" || r.status === "unpaid",
-  );
-  const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
+
+  const remaining = expected - collected;
   const pct = expected > 0 ? Math.round((collected / expected) * 100) : 0;
+  const live = rooms.length - count.vacant;
+
+  const v = first(sp.v);
+  const view: Filter = FILTERS.find((f) => f === v) ?? "all";
+  const shown = view === "all" ? rows : rows.filter((r) => r.status === view);
+  const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
 
   return (
-    <main className="flex flex-col gap-4">
+    <main className="flex flex-col gap-5">
       <Flash ok={first(sp.ok)} error={first(sp.error)} />
 
-      <div className="flex items-center justify-between">
-        <Link
-          href={`/admin?m=${shiftPeriod(period, -1)}`}
-          aria-label="Tháng trước"
-          className="btn-ghost size-12 !px-0"
-        >
-          ‹
-        </Link>
-        <h1 className="text-xl font-bold">Tháng {periodLabel(period)}</h1>
-        <Link
-          href={`/admin?m=${shiftPeriod(period, 1)}`}
-          aria-label="Tháng sau"
-          className="btn-ghost size-12 !px-0"
-        >
-          ›
-        </Link>
-      </div>
-
-      {/* Tổng kết tiền */}
-      <section className="card flex flex-col gap-3">
-        <div>
-          <p className="text-sm font-medium text-muted">Đã thu</p>
-          <p className="text-3xl font-bold text-ok">{moneyD(collected)}</p>
+      {/* Tổng kết tháng */}
+      <section className="rounded-3xl bg-accent p-5 text-accent-ink">
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={`/admin?m=${shiftPeriod(period, -1)}`}
+            aria-label="Tháng trước"
+            className="flex size-11 items-center justify-center rounded-full bg-accent-ink/15 text-2xl no-underline"
+          >
+            ‹
+          </Link>
+          <div className="text-center">
+            <h1 className="text-lg font-bold leading-tight">
+              Tháng {periodLabel(period)}
+            </h1>
+            <p className="text-sm opacity-80">
+              {live}/{rooms.length} phòng đang thuê
+            </p>
+          </div>
+          <Link
+            href={`/admin?m=${shiftPeriod(period, 1)}`}
+            aria-label="Tháng sau"
+            className="flex size-11 items-center justify-center rounded-full bg-accent-ink/15 text-2xl no-underline"
+          >
+            ›
+          </Link>
         </div>
+
+        <div className="mt-5 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-base opacity-80">
+              {expected === 0
+                ? "Chưa có hóa đơn"
+                : remaining === 0
+                  ? "Đã thu đủ"
+                  : "Còn phải thu"}
+            </p>
+            <p className="text-4xl font-bold leading-tight">
+              {moneyD(remaining)}
+            </p>
+          </div>
+          <p className="shrink-0 rounded-full bg-accent-ink/15 px-3 py-1 text-lg font-bold">
+            {pct}%
+          </p>
+        </div>
+
         <div
-          className="h-3 overflow-hidden rounded-full bg-line"
+          className="mt-4 h-2.5 overflow-hidden rounded-full bg-accent-ink/20"
           role="img"
           aria-label={`Đã thu ${pct}%`}
         >
           <div
-            className="h-3 rounded-full bg-ok"
+            className="h-2.5 rounded-full bg-accent-ink"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <dl className="flex flex-col gap-1 text-sm">
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Còn thiếu</dt>
-            <dd className="font-bold text-bad">
-              {moneyD(expected - collected)}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Tổng tháng này ({pct}% đã thu)</dt>
-            <dd className="font-semibold">{moneyD(expected)}</dd>
-          </div>
-        </dl>
+        <p className="mt-2 text-base opacity-90">
+          Đã thu {moneyD(collected)} / tổng {moneyD(expected)}
+        </p>
       </section>
 
-      {/* Việc cần làm tiếp theo */}
-      {pendingCount > 0 || draftCount > 0 ? (
-        <section className="flex flex-col gap-2">
-          {pendingCount > 0 ? (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
-              <p className="font-medium">
-                <span className="mr-2 text-xl font-bold">{pendingCount}</span>
-                phòng chưa nhập đủ số
-              </p>
-              <Link
-                href={`/admin/nhap-so?m=${period}`}
-                className="btn-ghost shrink-0"
-              >
-                Nhập số
-              </Link>
-            </div>
-          ) : null}
-          {draftCount > 0 ? (
-            <form
-              action={publishAllAction}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-warn-bg p-4"
-            >
-              <input type="hidden" name="period" value={period} />
-              <input type="hidden" name="back" value={back} />
-              <p className="font-medium text-warn">
-                <span className="mr-2 text-xl font-bold">{draftCount}</span>
-                phòng chờ công bố
-              </p>
-              <button type="submit" className="btn-primary shrink-0">
-                Công bố tất cả
-              </button>
-            </form>
-          ) : null}
-        </section>
-      ) : null}
+      {/* Ba con số theo trạng thái, bấm để lọc danh sách */}
+      <section className="grid grid-cols-3 gap-2">
+        {(
+          [
+            ["paid", "Đã thu"],
+            ["unpaid", "Chưa thu"],
+            ["draft", "Chờ công bố"],
+          ] as const
+        ).map(([k, label]) => (
+          <Link
+            key={k}
+            href={`/admin?m=${period}&v=${view === k ? "all" : k}`}
+            aria-current={view === k ? "page" : undefined}
+            className={`card flex flex-col gap-0.5 !p-3 no-underline ${
+              view === k ? "!border-2 !border-accent" : ""
+            }`}
+          >
+            <span className={`text-sm font-semibold ${ST[k].text}`}>{label}</span>
+            <span className="text-xl font-bold leading-tight text-ink">
+              {moneyShort(sum[k])}
+            </span>
+            <span className="text-sm text-muted">{count[k]} phòng</span>
+          </Link>
+        ))}
+      </section>
 
-      {/* Sơ đồ các phòng: nhìn một lần biết phòng nào đang ở trạng thái nào */}
+      {/* Danh sách phòng: mỗi phòng hai dòng, bấm để xem chi tiết */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold">Các phòng</h2>
-        <ul className="grid grid-cols-3 gap-2">
-          {rows.map(({ room, status, total }) => {
-            const t = TILE[status];
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Các phòng</h2>
+          {view !== "all" ? (
+            <Link
+              href={`/admin?m=${period}&v=all`}
+              className="flex min-h-11 items-center font-semibold text-accent"
+            >
+              Xem tất cả
+            </Link>
+          ) : null}
+        </div>
+
+        {count.draft > 1 ? (
+          <form action={publishAllAction}>
+            <input type="hidden" name="period" value={period} />
+            <input type="hidden" name="back" value={back} />
+            <button type="submit" className="btn-primary w-full">
+              Công bố tất cả ({count.draft} phòng)
+            </button>
+          </form>
+        ) : null}
+
+        <ul className="card divide-y divide-line overflow-hidden !p-0">
+          {shown.map(({ room, inv, status, res, total }) => {
+            const s = ST[status];
+            const got = inv ? (received.get(inv.id) ?? 0) : 0;
+            const hidden = { room: room.id, period, back };
+            const head = (
+              <>
+                <span
+                  className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${s.badge}`}
+                >
+                  {room.name.replace(/^Phòng\s*/i, "")}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold">{room.name}</span>
+                  <span className="block truncate text-sm text-muted">
+                    {room.is_vacant
+                      ? "Chưa có người thuê"
+                      : room.tenant_name || "Chưa nhập tên"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block font-bold">
+                    {total !== null ? moneyD(total) : ""}
+                  </span>
+                  <span className={`block text-sm font-semibold ${s.text}`}>
+                    {s.label}
+                  </span>
+                </span>
+              </>
+            );
+
+            if (status === "vacant") {
+              return (
+                <li
+                  key={room.id}
+                  className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3"
+                >
+                  {head}
+                </li>
+              );
+            }
+
             return (
               <li key={room.id}>
-                <Link
-                  href={`/admin/nhap-so?m=${period}&room=${room.id}`}
-                  aria-label={`${room.name}: ${CHIP[status].label}`}
-                  className={`flex min-h-[7rem] flex-col items-center justify-center gap-1 rounded-2xl border-2 p-2 text-center no-underline ${t.cls}`}
-                >
-                  <span className="text-3xl font-bold leading-none">
-                    {room.name.replace(/^Phòng\s*/i, "")}
-                  </span>
-                  <span className="text-sm font-semibold leading-tight">
-                    {t.label}
-                  </span>
-                  <span className="text-sm leading-tight">
-                    {total !== null
-                      ? moneyShort(total)
-                      : room.is_vacant
-                        ? ""
-                        : "—"}
-                  </span>
-                </Link>
+                <details className="group">
+                  <summary className="flex min-h-[4.5rem] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                    {head}
+                    <span
+                      className="shrink-0 text-muted transition-transform group-open:rotate-180"
+                      aria-hidden="true"
+                    >
+                      ▾
+                    </span>
+                  </summary>
+
+                  <div className="flex flex-col gap-3 px-4 pb-4">
+                    {inv && res && total !== null ? (
+                      <dl className="flex flex-col gap-1">
+                        {(
+                          [
+                            ["Tiền phòng", moneyD(inv.rent)],
+                            ["Điện (" + res.kwh + " kWh)", moneyD(res.elecAmount)],
+                            ["Nước (" + res.m3 + " m³)", moneyD(res.waterAmount)],
+                            [
+                              "Phí khác",
+                              moneyD(res.feesTotal + res.adjustmentsTotal),
+                            ],
+                          ] as const
+                        ).map(([label, val]) => (
+                          <div key={label} className="flex justify-between gap-3">
+                            <dt className="text-muted">{label}</dt>
+                            <dd className="font-semibold">{val}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+
+                    {status === "draft" || status === "unpaid" ? (
+                      <p className="text-sm text-muted">
+                        Hạn đóng{" "}
+                        {dueDate(period, room.billing_day, settings.due_days)}
+                        {got > 0 && total !== null ? (
+                          <span className="font-medium text-ok">
+                            {" "}
+                            · Đã nhận {moneyD(got)}
+                            {got < total ? `, còn ${moneyD(total - got)}` : ""}
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null}
+
+                    {status === "pending" ? (
+                      <Link
+                        href={`/admin/nhap-so?m=${period}&room=${room.id}`}
+                        className="btn-primary w-full"
+                      >
+                        Nhập số điện, nước
+                      </Link>
+                    ) : null}
+
+                    {status === "draft" ? (
+                      <form action={publishRoomAction}>
+                        <Hidden {...hidden} />
+                        <button type="submit" className="btn-primary w-full">
+                          Công bố cho người thuê
+                        </button>
+                      </form>
+                    ) : null}
+
+                    {status === "unpaid" ? (
+                      <div className="flex flex-wrap gap-2">
+                        <form
+                          action={setPaidAction}
+                          className="min-w-0 flex-1 basis-40"
+                        >
+                          <Hidden {...hidden} />
+                          <input type="hidden" name="paid" value="1" />
+                          <button type="submit" className="btn-primary w-full">
+                            Đã thu tiền
+                          </button>
+                        </form>
+                        {inv && total !== null ? (
+                          <SendLink
+                            compact
+                            path={`/p/${room.token}`}
+                            phone={room.tenant_phone.replace(/\D/g, "")}
+                            message={`Chào ${room.tenant_name || "bạn"}, hóa đơn ${room.name} tháng ${periodLabel(period)} là ${moneyD(total)}. Xem chi tiết tại: {link}`}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <Link
+                      href={`/admin/nhap-so?m=${period}&room=${room.id}`}
+                      className="text-sm font-semibold text-accent"
+                    >
+                      Xem / sửa chi tiết phòng
+                    </Link>
+                  </div>
+                </details>
               </li>
             );
           })}
         </ul>
-        <p className="text-xs text-muted">
-          Bấm vào một phòng để nhập số, công bố hoặc xem chi tiết.
-        </p>
-      </section>
-
-      {/* Việc cần xử lý */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold">Cần xử lý</h2>
-        {todo.length === 0 ? (
-          <p className="card text-center text-muted">
-            ✓ Không có việc nào cần làm lúc này.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {todo.map(({ room, inv, status, total }) => {
-              const got = inv ? (received.get(inv.id) ?? 0) : 0;
-              const hidden = { room: room.id, period, back };
-              return (
-                <li
-                  key={room.id}
-                  className={`card flex flex-col gap-3 border-l-8 ${CHIP[status].bar}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-lg font-bold">{room.name}</p>
-                      <p className="truncate text-sm text-muted">
-                        {room.tenant_name || "Chưa nhập tên"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <p className="text-lg font-bold">
-                        {total !== null ? moneyD(total) : "—"}
-                      </p>
-                      <span className={`chip ${CHIP[status].cls}`}>
-                        {CHIP[status].label}
-                      </span>
-                    </div>
-                  </div>
-                  {got > 0 ? (
-                    <p className="text-sm font-medium text-ok">
-                      Đã nhận qua SePay {moneyD(got)}
-                      {total !== null && got < total
-                        ? `, còn thiếu ${moneyD(total - got)}`
-                        : ""}
-                    </p>
-                  ) : null}
-                  {status === "draft" ? (
-                    <form action={publishRoomAction}>
-                      <Hidden {...hidden} />
-                      <button type="submit" className="btn-primary w-full">
-                        Công bố cho người thuê
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <form action={setPaidAction}>
-                        <Hidden {...hidden} />
-                        <input type="hidden" name="paid" value="1" />
-                        <button type="submit" className="btn-primary w-full">
-                          Đánh dấu đã thu
-                        </button>
-                      </form>
-                      {inv && total !== null ? (
-                        <SendLink
-                          path={`/p/${room.token}`}
-                          phone={room.tenant_phone.replace(/\D/g, "")}
-                          message={`Chào ${room.tenant_name || "bạn"}, hóa đơn ${room.name} tháng ${periodLabel(period)} là ${moneyD(total)}. Xem chi tiết tại: {link}`}
-                        />
-                      ) : null}
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </section>
 
       {/* Giao dịch SePay */}
