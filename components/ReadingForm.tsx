@@ -167,14 +167,14 @@ function WaterBreakdown({
       <div className="flex justify-between gap-2">
         <dt className="flex items-center gap-1.5">
           <span className="size-2 rounded-full bg-c-water" aria-hidden="true" />{" "}
-          Giá rẻ: {fmtNum(lowM3)} × {money(low)}đ
+          Trong định mức: {fmtNum(lowM3)} × {money(low)}đ
         </dt>
         <dd className="font-semibold">{money(Math.round(lowM3 * low))}đ</dd>
       </div>
       <div className="flex justify-between gap-2">
         <dt className="flex items-center gap-1.5">
           <span className="size-2 rounded-full bg-c-high" aria-hidden="true" />{" "}
-          Giá cao: {fmtNum(highM3)} × {money(high)}đ
+          Vượt định mức: {fmtNum(highM3)} × {money(high)}đ
         </dt>
         <dd className="font-semibold">{money(Math.round(highM3 * high))}đ</dd>
       </div>

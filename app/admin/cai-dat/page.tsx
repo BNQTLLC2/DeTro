@@ -51,7 +51,7 @@ export default async function SettingsPage({
           <Head
             icon="💧"
             title="Tiền nước"
-            hint="Mỗi người có một số khối nước định mức tính giá thấp, dùng vượt thì tính giá cao."
+            hint="Mỗi người có một số khối nước định mức tính giá thấp, dùng vượt định mức thì tính giá cao."
           />
           <T
             label="Số khối nước định mức cho mỗi người"

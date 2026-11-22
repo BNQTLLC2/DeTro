@@ -203,7 +203,7 @@ export default async function EnterReadings({
           title="Nước"
           ok={res.waterState === "ok"}
           date={inv?.water_read_at}
-          sub={`Giá rẻ tối đa ${quota} m³ (${selected.occupants} người × ${quotaPer})`}
+          sub={`Định mức ${quota} m³ (${selected.occupants} người × ${quotaPer})`}
         />
         <ReadingForm
           key={`w-${selected.id}-${period}-${inv?.water_end ?? "x"}-${inv?.water_start ?? "x"}`}

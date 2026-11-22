@@ -329,14 +329,14 @@ export default async function TenantPage({
           />
           <div className="flex flex-col gap-1.5 rounded-xl bg-c-water-soft p-3.5">
             <p className="text-sm">
-              Mỗi người được {n1(inv.water_quota)} khối nước giá rẻ. Phòng bạn có {inv.occupants} người nên được{" "}
-              {n1(res.quota)} khối giá rẻ.
+              Mỗi người có định mức {n1(inv.water_quota)} khối nước. Phòng bạn có {inv.occupants} người nên định mức là{" "}
+              {n1(res.quota)} khối.
             </p>
             <p className="font-semibold">
-              {n1(res.lowM3)} khối × {moneyD(inv.water_low)} = {moneyD(res.lowAmount)}
+              Trong định mức: {n1(res.lowM3)} khối × {moneyD(inv.water_low)} = {moneyD(res.lowAmount)}
             </p>
             <p className="font-semibold">
-              {n1(res.highM3)} khối × {moneyD(inv.water_high)} = {moneyD(res.highAmount)}
+              Vượt định mức: {n1(res.highM3)} khối × {moneyD(inv.water_high)} = {moneyD(res.highAmount)}
             </p>
             <p className="text-sm">Cộng lại: {moneyD(res.waterAmount)}</p>
           </div>
@@ -438,7 +438,7 @@ export default async function TenantPage({
               data={chartData.map(({ i, r }) => ({ key: i.period, label: periodShort(i.period), value: r.m3, text: n1(r.m3) }))}
               selected={inv.period}
               line={res.quota > 0 ? res.quota : undefined}
-              note={`Vạch cam đứt là mức nước giá rẻ của tháng đang xem (${n1(res.quota)} khối). Cột nào cao hơn vạch thì phần vượt phải trả giá cao.`}
+              note={`Vạch cam đứt là định mức nước của tháng đang xem (${n1(res.quota)} khối). Cột nào cao hơn vạch thì phần vượt định mức tính giá cao hơn.`}
             />
           ) : null}
         </section>
