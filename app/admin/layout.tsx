@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AdminNav } from "@/components/AdminNav";
 import { FontSizeToggle } from "@/components/FontSizeToggle";
+import { NoticeProvider } from "@/components/Notice";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/queries";
@@ -31,7 +32,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <AdminNav />
         </div>
       </header>
-      {children}
+      <NoticeProvider>{children}</NoticeProvider>
     </div>
   );
 }

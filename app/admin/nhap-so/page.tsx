@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MoneyInput } from "@/components/MoneyInput";
+import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { Flash } from "@/components/Flash";
 import { FeeTypes } from "@/components/FeeTypes";
 import { ReadingForm } from "@/components/ReadingForm";
 import { FEE_METHOD_LABEL, computeInvoice } from "@/lib/billing";
@@ -90,7 +90,6 @@ export default async function EnterReadings({
     byRoom.get(selected.id) ?? (await getInvoice(selected.id, period));
   const defaults = await readingDefaults(selected, inv, period);
   const feeRows = await getRoomFeeRows(selected.id);
-  const back = `/admin/nhap-so?m=${period}&room=${selected.id}`;
 
   // Tạm tính: dùng số đã lưu và giá hiện hành (nếu chưa có hóa đơn thì dùng cài đặt hiện tại).
   const res = inv
@@ -119,7 +118,6 @@ export default async function EnterReadings({
 
   return (
     <main>
-      <Flash ok={first(sp.ok)} error={first(sp.error)} />
       {header}
 
       <nav
@@ -189,7 +187,6 @@ export default async function EnterReadings({
           action={saveReadingAction}
           roomId={selected.id}
           period={period}
-          back={back}
           defaultStart={defaults.elecStart}
           defaultEnd={inv?.elec_end ?? null}
           saved={res.elecState === "ok"}
@@ -211,7 +208,6 @@ export default async function EnterReadings({
           action={saveReadingAction}
           roomId={selected.id}
           period={period}
-          back={back}
           defaultStart={defaults.waterStart}
           defaultEnd={inv?.water_end ?? null}
           saved={res.waterState === "ok"}
@@ -222,14 +218,13 @@ export default async function EnterReadings({
       </section>
 
       <section className="card mb-3">
-        <form
+        <ActionForm
           action={saveFeesAction}
           className="flex flex-col gap-3"
           key={`fees-${selected.id}-${period}`}
         >
           <input type="hidden" name="room" value={selected.id} />
           <input type="hidden" name="period" value={period} />
-          <input type="hidden" name="back" value={back} />
           <div>
             <h3 className="text-base font-bold">Các khoản phí khác</h3>
             <p className="text-sm text-muted">
@@ -265,7 +260,7 @@ export default async function EnterReadings({
                   <ConfirmButton
                     message={`Xóa "${f.name}" khỏi tất cả các phòng? Hóa đơn đã công bố không bị ảnh hưởng.`}
                     className="btn-ghost !min-h-9 shrink-0 !px-3 text-sm"
-                    formAction={deleteFeeTypeAction.bind(null, f.id)}
+                    action={deleteFeeTypeAction.bind(null, f.id)}
                   >
                     Xóa
                   </ConfirmButton>
@@ -307,11 +302,11 @@ export default async function EnterReadings({
             </div>
           ))}
           {feeRows.length > 0 ? (
-            <button type="submit" className="btn-primary">
+            <SubmitButton className="btn-primary" pendingText="Đang lưu...">
               Lưu các khoản phí
-            </button>
+            </SubmitButton>
           ) : null}
-        </form>
+        </ActionForm>
         {inv && inv.adjustments.length > 0 ? (
           <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3">
             <h4 className="font-semibold">Chỉ tháng này</h4>
@@ -324,10 +319,9 @@ export default async function EnterReadings({
                   <span>{a.name}</span>
                   <span className="flex items-center gap-2">
                     <b>{moneyD(a.amount)}</b>
-                    <form action={removeAdjustmentAction}>
+                    <ActionForm action={removeAdjustmentAction}>
                       <input type="hidden" name="room" value={selected.id} />
                       <input type="hidden" name="period" value={period} />
-                      <input type="hidden" name="back" value={back} />
                       <input type="hidden" name="index" value={idx} />
                       <ConfirmButton
                         message="Bỏ khoản này?"
@@ -335,7 +329,7 @@ export default async function EnterReadings({
                       >
                         Xóa
                       </ConfirmButton>
-                    </form>
+                    </ActionForm>
                   </span>
                 </li>
               ))}
@@ -344,7 +338,7 @@ export default async function EnterReadings({
         ) : null}
       </section>
 
-      <FeeTypes roomId={selected.id} back={back} period={period} />
+      <FeeTypes roomId={selected.id} period={period} />
       <div className="mb-3" />
 
       <section className="card flex flex-col gap-2">
@@ -387,28 +381,26 @@ export default async function EnterReadings({
         <div className="grid grid-cols-2 gap-2">
           {published ? (
             <>
-              <form action={unpublishRoomAction} className="col-span-2">
+              <ActionForm action={unpublishRoomAction} className="col-span-2">
                 <input type="hidden" name="room" value={selected.id} />
                 <input type="hidden" name="period" value={period} />
-                <input type="hidden" name="back" value={back} />
-                <button type="submit" className="btn-ghost w-full">
+                <SubmitButton className="btn-ghost w-full" pendingText="Đang hủy...">
                   Hủy công bố
-                </button>
-              </form>
+                </SubmitButton>
+              </ActionForm>
             </>
           ) : (
-            <form action={publishRoomAction} className="col-span-2">
+            <ActionForm action={publishRoomAction} className="col-span-2">
               <input type="hidden" name="room" value={selected.id} />
               <input type="hidden" name="period" value={period} />
-              <input type="hidden" name="back" value={back} />
-              <button
-                type="submit"
+              <SubmitButton
                 disabled={!res.complete}
                 className="btn-primary w-full"
+                pendingText="Đang công bố..."
               >
                 Công bố cho người thuê
-              </button>
-            </form>
+              </SubmitButton>
+            </ActionForm>
           )}
         </div>
       </section>

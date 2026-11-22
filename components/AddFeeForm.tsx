@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ActionForm, SubmitButton, type FormAction } from "@/components/ActionForm";
 import { MoneyInput } from "@/components/MoneyInput";
-
-type Action = (fd: FormData) => void | Promise<void>;
 
 /**
  * Form thêm khoản phí. Một ô chọn "Loại khoản" gồm các cách tính hằng tháng
@@ -11,26 +10,23 @@ type Action = (fd: FormData) => void | Promise<void>;
  */
 export function AddFeeForm({
   roomId,
-  back,
   period,
   methods,
   createAction,
   onceAction,
 }: {
   roomId: number;
-  back: string;
   period: string;
   methods: { value: string; label: string }[];
-  createAction: Action;
-  onceAction: Action;
+  createAction: FormAction;
+  onceAction: FormAction;
 }) {
   const [kind, setKind] = useState("fixed");
   const once = kind === "once";
 
   return (
-    <form action={once ? onceAction : createAction} className="mt-3 grid grid-cols-2 gap-3">
+    <ActionForm action={once ? onceAction : createAction} className="mt-3 grid grid-cols-2 gap-3" resetOnOk>
       <input type="hidden" name="room" value={roomId} />
-      <input type="hidden" name="back" value={back} />
       <input type="hidden" name="period" value={period} />
       {once ? null : <input type="hidden" name="method" value={kind} />}
       <p className="col-span-2 text-sm text-muted">
@@ -71,9 +67,9 @@ export function AddFeeForm({
           className="input"
         />
       </label>
-      <button type="submit" className="btn-ghost col-span-2">
+      <SubmitButton className="btn-ghost col-span-2" pendingText="Đang thêm...">
         {once ? "Thêm khoản" : "Thêm loại phí"}
-      </button>
-    </form>
+      </SubmitButton>
+    </ActionForm>
   );
 }

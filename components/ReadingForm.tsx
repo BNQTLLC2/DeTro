@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { ActionForm, SubmitButton, type FormAction } from "@/components/ActionForm";
 import { money } from "@/lib/format";
 
 type Common = {
-  action: (fd: FormData) => void | Promise<void>;
+  action: FormAction;
   roomId: number;
   period: string;
-  back: string;
   defaultStart: number;
   defaultEnd: number | null;
   saved: boolean;
@@ -48,10 +48,9 @@ export function ReadingForm(p: Props) {
   const tone = p.kind === "elec" ? "bg-c-elec-soft" : "bg-c-water-soft";
 
   return (
-    <form action={p.action} className="flex flex-col gap-3">
+    <ActionForm action={p.action} className="flex flex-col gap-3">
       <input type="hidden" name="room" value={p.roomId} />
       <input type="hidden" name="period" value={p.period} />
-      <input type="hidden" name="back" value={p.back} />
       <input type="hidden" name="kind" value={p.kind} />
 
       <div className="grid grid-cols-[1fr_auto_1.3fr] items-end gap-2">
@@ -129,11 +128,11 @@ export function ReadingForm(p: Props) {
       {p.saved && !dirty ? (
         <p className="text-center text-sm font-medium text-ok">✓ Đã lưu</p>
       ) : (
-        <button type="submit" disabled={!ok} className="btn-primary">
+        <SubmitButton disabled={!ok} className="btn-primary" pendingText="Đang lưu...">
           {submitLabel}
-        </button>
+        </SubmitButton>
       )}
-    </form>
+    </ActionForm>
   );
 }
 

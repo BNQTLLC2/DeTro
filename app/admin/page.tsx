@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flash } from "@/components/Flash";
+import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { SendLink } from "@/components/SendLink";
 import {
   moneyD,
@@ -107,7 +107,6 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const m = first(sp.m);
   const period = isPeriod(m) ? m : currentPeriod();
-  const back = `/admin?m=${period}`;
 
   await autoPublishRent(); // đến ngày thu thì tự công bố tiền trọ
   const [rooms, invoices, settings, received, recent] = await Promise.all([
@@ -174,8 +173,6 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
 
   return (
     <main className="flex flex-col gap-4">
-      <Flash ok={first(sp.ok)} error={first(sp.error)} />
-
       {/* Tổng kết tháng */}
       <section className="rounded-3xl bg-accent p-4 text-accent-ink">
         <div className="flex items-center justify-between gap-3">
@@ -277,13 +274,12 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         </div>
 
         {rows.filter((r) => r.parts.some((p) => p.key === "other" && p.status === "draft")).length > 1 ? (
-          <form action={publishAllAction}>
+          <ActionForm action={publishAllAction}>
             <input type="hidden" name="period" value={period} />
-            <input type="hidden" name="back" value={back} />
-            <button type="submit" className="btn-primary w-full">
+            <SubmitButton className="btn-primary w-full" pendingText="Đang công bố...">
               Công bố điện, nước tất cả ({rows.filter((r) => r.parts.some((p) => p.key === "other" && p.status === "draft")).length} phòng)
-            </button>
-          </form>
+            </SubmitButton>
+          </ActionForm>
         ) : null}
 
         <ul className="card divide-y divide-line overflow-hidden !p-0">
@@ -291,7 +287,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
             const s = ST[status];
             const got = inv ? (received.get(inv.id) ?? { rent: 0, other: 0 }) : { rent: 0, other: 0 };
             const total = parts.reduce((t, p) => t + (p.amount ?? 0), 0);
-            const hidden = { room: room.id, period, back };
+            const hidden = { room: room.id, period };
             const head = (
               <>
                 <span
@@ -407,29 +403,29 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                           ) : null}
 
                           {p.status === "draft" ? (
-                            <form action={p.key === "rent" ? publishRentAction : publishRoomAction}>
+                            <ActionForm action={p.key === "rent" ? publishRentAction : publishRoomAction}>
                               <Hidden {...hidden} />
-                              <button type="submit" className="btn-primary w-full">
+                              <SubmitButton className="btn-primary w-full" pendingText="Đang công bố...">
                                 {p.key === "rent"
                                   ? "Công bố tiền trọ cho người thuê"
                                   : "Công bố cho người thuê"}
-                              </button>
-                            </form>
+                              </SubmitButton>
+                            </ActionForm>
                           ) : null}
 
                           {p.status === "unpaid" ? (
                             <div className="flex flex-wrap gap-2">
-                              <form
+                              <ActionForm
                                 action={setPaidAction}
                                 className="min-w-0 flex-1 basis-40"
                               >
                                 <Hidden {...hidden} />
                                 <input type="hidden" name="part" value={p.key} />
                                 <input type="hidden" name="paid" value="1" />
-                                <button type="submit" className="btn-primary w-full">
+                                <SubmitButton className="btn-primary w-full" pendingText="Đang lưu...">
                                   Đã thu {p.key === "rent" ? "tiền trọ" : "chi phí khác"}
-                                </button>
-                              </form>
+                                </SubmitButton>
+                              </ActionForm>
                               {inv && p.amount !== null ? (
                                 <SendLink
                                   compact
@@ -442,7 +438,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                           ) : null}
 
                           {p.status === "paid" || (p.key === "rent" && p.status === "unpaid") ? (
-                            <form
+                            <ActionForm
                               action={
                                 p.status === "paid" ? setPaidAction : unpublishRentAction
                               }
@@ -454,10 +450,10 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
                                   <input type="hidden" name="paid" value="0" />
                                 </>
                               ) : null}
-                              <button type="submit" className="btn-ghost w-full">
+                              <SubmitButton className="btn-ghost w-full" pendingText="Đang lưu...">
                                 {p.status === "paid" ? "Bỏ đánh dấu đã thu" : "Hủy công bố tiền trọ"}
-                              </button>
-                            </form>
+                              </SubmitButton>
+                            </ActionForm>
                           ) : null}
                         </div>
                       );
@@ -533,20 +529,11 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
   );
 }
 
-function Hidden({
-  room,
-  period,
-  back,
-}: {
-  room: number;
-  period: string;
-  back: string;
-}) {
+function Hidden({ room, period }: { room: number; period: string }) {
   return (
     <>
       <input type="hidden" name="room" value={room} />
       <input type="hidden" name="period" value={period} />
-      <input type="hidden" name="back" value={back} />
     </>
   );
 }

@@ -1,22 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { MoneyInput } from "@/components/MoneyInput";
-import { Flash } from "@/components/Flash";
 import { TokenPanel } from "@/components/TokenPanel";
-import { first, type SP } from "@/lib/params";
 import { getRoom } from "@/lib/queries";
 import { saveRoomAction } from "../../actions";
 
 export const metadata = { title: "Chi tiết phòng" };
 
-export default async function RoomPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: SP;
-}) {
-  const [{ id }, sp] = await Promise.all([params, searchParams]);
+export default async function RoomPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const roomId = Number(id);
   if (!Number.isInteger(roomId)) notFound();
   const r = await getRoom(roomId);
@@ -24,7 +17,6 @@ export default async function RoomPage({
 
   return (
     <main className="flex flex-col gap-4">
-      <Flash ok={first(sp.ok)} error={first(sp.error)} />
       <div>
         <Link href="/admin/phong" className="text-sm text-muted no-underline">
           ‹ Tất cả phòng
@@ -32,9 +24,8 @@ export default async function RoomPage({
         <h1 className="mt-1 text-lg font-semibold">{r.name}</h1>
       </div>
 
-      <form action={saveRoomAction} className="card flex flex-col gap-3">
+      <ActionForm action={saveRoomAction} className="card flex flex-col gap-3">
         <input type="hidden" name="id" value={r.id} />
-        <input type="hidden" name="back" value={`/admin/phong/${r.id}`} />
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="Tên / số phòng"
@@ -110,10 +101,10 @@ export default async function RoomPage({
           Phòng đang trống (không tạo hóa đơn)
         </label>
 
-        <button type="submit" className="btn-primary">
+        <SubmitButton className="btn-primary" pendingText="Đang lưu...">
           Lưu phòng
-        </button>
-      </form>
+        </SubmitButton>
+      </ActionForm>
 
       <section className="card flex flex-col gap-3">
         <h2 className="text-base font-bold">Link xem hóa đơn của người thuê</h2>

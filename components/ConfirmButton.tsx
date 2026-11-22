@@ -1,36 +1,47 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import { useActionForm, type FormAction } from "@/components/ActionForm";
 
-/** Nút trong form, hỏi lại trước khi gửi (xóa, đổi link...). Có thể gửi form tới một action riêng bằng formAction. */
+/**
+ * Nút trong ActionForm, hỏi lại trước khi thực hiện (xóa, đổi link...).
+ * - Không có `action`: gửi chính form chứa nó.
+ * - Có `action`: chạy action riêng với dữ liệu của form. Nút này là type="button" nên bấm Enter
+ *   trong một ô nhập sẽ không bao giờ vô tình kích hoạt nó.
+ */
 export function ConfirmButton({
   message,
   className,
   children,
-  formAction,
-  name,
-  value,
+  action,
+  pendingText = "Đang xóa...",
 }: {
   message: string;
   className?: string;
   children: ReactNode;
-  formAction?: (fd: FormData) => void | Promise<void>;
-  name?: string;
-  value?: string | number;
+  action?: FormAction;
+  pendingText?: string;
 }) {
+  const { pending, submitter, submitWith } = useActionForm();
+  const id = useId();
+  const mine = pending && submitter === id;
+
   return (
     <button
-      type="submit"
+      data-submit-id={id}
+      type={action ? "button" : "submit"}
       className={className}
-      formAction={formAction}
-      formNoValidate={formAction ? true : undefined}
-      name={name}
-      value={value}
+      disabled={pending}
+      aria-busy={mine || undefined}
       onClick={(e) => {
-        if (!confirm(message)) e.preventDefault();
+        if (!confirm(message)) {
+          e.preventDefault();
+          return;
+        }
+        if (action) submitWith(action, e.currentTarget);
       }}
     >
-      {children}
+      {mine ? pendingText : children}
     </button>
   );
 }

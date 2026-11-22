@@ -14,11 +14,9 @@ const METHODS = (Object.keys(FEE_METHOD_LABEL) as FeeMethod[]).map((m) => ({
  */
 export function FeeTypes({
   roomId,
-  back,
   period,
 }: {
   roomId: number;
-  back: string;
   /** Kỳ đang xem (YYYY-MM): hóa đơn kỳ đó cập nhật theo khoản mới. */
   period: string;
 }) {
@@ -35,7 +33,6 @@ export function FeeTypes({
       </summary>
       <AddFeeForm
         roomId={roomId}
-        back={back}
         period={period}
         methods={METHODS}
         createAction={createFeeTypeAction}

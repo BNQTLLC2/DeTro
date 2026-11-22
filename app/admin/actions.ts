@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import type { ActionState } from "@/lib/action-state";
 import { requireAdmin } from "@/lib/auth";
 import { currentPeriod, isPeriod, periodName } from "@/lib/format";
 import type { FeeMethod } from "@/lib/billing";
@@ -27,59 +27,47 @@ function numOf(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Chỉ cho quay lại các trang trong /admin, tránh chuyển hướng ra ngoài. */
-function safeBack(fd: FormData, fallback = "/admin"): string {
-  const b = str(fd, "back");
-  return b.startsWith("/admin") && !b.startsWith("//") ? b : fallback;
-}
-
-function go(back: string, kind: "ok" | "error", msg: string): never {
-  const sep = back.includes("?") ? "&" : "?";
-  redirect(`${back}${sep}${kind}=${encodeURIComponent(msg)}`);
-}
-
 function periodOf(fd: FormData): string {
   const p = str(fd, "period");
   if (!isPeriod(p)) throw new Error("Kỳ không hợp lệ.");
   return p;
 }
 
-async function run(back: string, okMsg: string, fn: () => Promise<string | void>): Promise<never> {
-  let msg = okMsg;
+/**
+ * Chạy một thao tác và trả kết quả về cho trang (không chuyển hướng), để trang giữ nguyên vị trí cuộn
+ * và hiện thông báo ngay cạnh nút vừa bấm.
+ */
+async function run(okMsg: string, fn: () => Promise<string | void>): Promise<ActionState> {
   try {
     const r = await fn();
-    if (typeof r === "string") msg = r;
+    revalidatePath("/admin", "layout");
+    return { ok: typeof r === "string" ? r : okMsg };
   } catch (e) {
-    go(back, "error", e instanceof Error ? e.message : "Có lỗi xảy ra.");
+    return { error: e instanceof Error ? e.message : "Có lỗi xảy ra." };
   }
-  revalidatePath("/admin", "layout");
-  go(back, "ok", msg);
 }
 
 /* --------------------------- Công bố / thu tiền --------------------------- */
 
-export async function publishRoomAction(fd: FormData) {
+export async function publishRoomAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
-  await run(back, "Đã công bố. Người thuê đã xem được hóa đơn.", async () => {
+  return run("Đã công bố. Người thuê đã xem được hóa đơn.", async () => {
     await Q.publishInvoice(roomId, periodOf(fd));
   });
 }
 
-export async function unpublishRoomAction(fd: FormData) {
+export async function unpublishRoomAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
-  await run(back, "Đã hủy công bố. Người thuê không còn thấy hóa đơn này.", async () => {
+  return run("Đã hủy công bố. Người thuê không còn thấy hóa đơn này.", async () => {
     await Q.unpublishInvoice(roomId, periodOf(fd));
   });
 }
 
-export async function publishAllAction(fd: FormData) {
+export async function publishAllAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
-  await run(back, "", async () => {
+  return run("", async () => {
     const n = await Q.publishAll(periodOf(fd));
     return n === 0
       ? "Không có phòng nào cần công bố (cần nhập đủ điện và nước)."
@@ -88,82 +76,75 @@ export async function publishAllAction(fd: FormData) {
 }
 
 /** Công bố / hủy công bố tiền trọ (đợt thu riêng, không cần số điện nước). */
-export async function publishRentAction(fd: FormData) {
+export async function publishRentAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
-  await run(back, "Đã công bố tiền trọ. Người thuê đã xem được và chuyển khoản.", async () => {
+  return run("Đã công bố tiền trọ. Người thuê đã xem được và chuyển khoản.", async () => {
     await Q.publishRent(roomId, periodOf(fd));
   });
 }
 
-export async function unpublishRentAction(fd: FormData) {
+export async function unpublishRentAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
-  await run(back, "Đã hủy công bố tiền trọ.", async () => {
+  return run("Đã hủy công bố tiền trọ.", async () => {
     await Q.unpublishRent(roomId, periodOf(fd));
   });
 }
 
 /** Đánh dấu đã thu một đợt: part = "rent" (tiền trọ) hoặc "other" (chi phí khác, mặc định). */
-export async function setPaidAction(fd: FormData) {
+export async function setPaidAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
   const paid = str(fd, "paid") === "1";
   const part = str(fd, "part") === "rent" ? "rent" : "other";
   const what = part === "rent" ? "tiền trọ" : "chi phí khác";
-  await run(back, paid ? `Đã đánh dấu đã thu ${what}.` : `Đã bỏ đánh dấu đã thu ${what}.`, async () => {
+  return run(paid ? `Đã đánh dấu đã thu ${what}.` : `Đã bỏ đánh dấu đã thu ${what}.`, async () => {
     await Q.setPaid(roomId, periodOf(fd), paid, part);
   });
 }
 
 /* ------------------------------ Nhập chỉ số ------------------------------ */
 
-export async function saveReadingAction(fd: FormData) {
+export async function saveReadingAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const kind = str(fd, "kind") === "water" ? "water" : "elec";
   const roomId = intOf(fd, "room");
   const start = numOf(fd, "start");
   const end = numOf(fd, "end");
-  await run(back, kind === "elec" ? "Đã lưu số điện." : "Đã lưu số nước.", async () => {
+  return run(kind === "elec" ? "Đã lưu số điện." : "Đã lưu số nước.", async () => {
     if (start === null || end === null) throw new Error("Hãy nhập đủ số đầu và số cuối.");
     await Q.saveReading(roomId, periodOf(fd), kind, start, end);
   });
 }
 
-export async function addAdjustmentAction(fd: FormData) {
+export async function addAdjustmentAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
   const name = str(fd, "name");
   const amount = intOf(fd, "amount", NaN);
-  await run(back, "Đã thêm khoản phát sinh.", async () => {
+  return run("Đã thêm khoản phát sinh.", async () => {
     if (!name) throw new Error("Hãy nhập tên khoản phát sinh.");
     if (!Number.isFinite(amount) || amount === 0) throw new Error("Số tiền không hợp lệ (có thể nhập số âm để giảm trừ).");
     await Q.addAdjustment(roomId, periodOf(fd), name, amount);
   });
 }
 
-export async function removeAdjustmentAction(fd: FormData) {
+export async function removeAdjustmentAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
   const index = intOf(fd, "index", -1);
-  await run(back, "Đã bỏ khoản phát sinh.", async () => {
+  return run("Đã bỏ khoản phát sinh.", async () => {
     await Q.removeAdjustment(roomId, periodOf(fd), index);
   });
 }
 
 /* ---------------------------------- Phòng --------------------------------- */
 
-export async function saveRoomAction(fd: FormData) {
+export async function saveRoomAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd, "/admin/phong");
   const id = intOf(fd, "id");
-  await run(back, "Đã lưu thông tin phòng.", async () => {
+  return run("Đã lưu thông tin phòng.", async () => {
     const name = str(fd, "name");
     if (!name) throw new Error("Tên phòng không được để trống.");
     const billingDay = intOf(fd, "billing_day", 1);
@@ -185,11 +166,10 @@ export async function saveRoomAction(fd: FormData) {
 }
 
 /** Lưu các khoản phí của một phòng trong trang Nhập số. */
-export async function saveFeesAction(fd: FormData) {
+export async function saveFeesAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  const back = safeBack(fd);
   const roomId = intOf(fd, "room");
-  await run(back, "Đã lưu các khoản phí. Tháng sau sẽ tự dùng lại.", async () => {
+  return run("Đã lưu các khoản phí. Tháng sau sẽ tự dùng lại.", async () => {
     const types = await Q.listFeeTypes();
     await Q.saveInvoiceFees(
       roomId,
@@ -201,14 +181,6 @@ export async function saveFeesAction(fd: FormData) {
         quantity: Math.max(intOf(fd, `fee_qty_${t.id}`, 1), 0),
       })),
     );
-  });
-}
-
-export async function regenerateTokenAction(fd: FormData) {
-  await requireAdmin();
-  const id = intOf(fd, "id");
-  await run("/admin/phong", "Đã đổi link. Link cũ không còn xem được, hãy gửi link mới cho người thuê.", async () => {
-    await Q.regenerateToken(id);
   });
 }
 
@@ -227,9 +199,9 @@ export async function regenerateTokenInlineAction(id: number): Promise<{ token: 
 
 /* --------------------------------- Cài đặt -------------------------------- */
 
-export async function saveSettingsAction(fd: FormData) {
+export async function saveSettingsAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
-  await run("/admin/cai-dat", "", async () => {
+  return run("", async () => {
     const quota = numOf(fd, "water_quota");
     if (quota === null || quota < 0) throw new Error("Số khối nước định mức không hợp lệ.");
     const feeDay = intOf(fd, "fee_day", 6);
@@ -256,12 +228,11 @@ function methodOf(fd: FormData): FeeMethod {
   return m === "per_person" || m === "per_unit" ? m : "fixed";
 }
 
-export async function createFeeTypeAction(fd: FormData) {
+export async function createFeeTypeAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const name = str(fd, "name");
   const roomId = intOf(fd, "room");
-  await run(
-    safeBack(fd, "/admin/phong"),
+  return run(
     roomId
       ? "Đã thêm loại phí cho phòng này. Các phòng khác đang tắt, bật ở trang từng phòng."
       : "Đã thêm loại phí.",
@@ -274,22 +245,22 @@ export async function createFeeTypeAction(fd: FormData) {
   );
 }
 
-export async function updateFeeTypeAction(fd: FormData) {
+export async function updateFeeTypeAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const id = intOf(fd, "id");
   const name = str(fd, "name");
-  await run(safeBack(fd, "/admin/phong"), "Đã lưu loại phí.", async () => {
+  return run("Đã lưu loại phí.", async () => {
     if (!name) throw new Error("Tên loại phí không được để trống.");
     await Q.updateFeeType(id, name, methodOf(fd), Math.max(intOf(fd, "amount"), 0), fd.get("active") === "on");
   });
 }
 
 /** Xóa một loại phí khỏi mọi phòng. `id` được gắn sẵn bằng bind ở nút Xóa. */
-export async function deleteFeeTypeAction(id: number, fd: FormData) {
+export async function deleteFeeTypeAction(id: number, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const roomId = intOf(fd, "room");
   const period = str(fd, "period");
-  await run(safeBack(fd, "/admin/phong"), "Đã xóa loại phí khỏi tất cả các phòng. Hóa đơn đã công bố không bị ảnh hưởng.", async () => {
+  return run("Đã xóa loại phí khỏi tất cả các phòng. Hóa đơn đã công bố không bị ảnh hưởng.", async () => {
     await Q.deleteFeeType(id);
     // Hóa đơn chưa công bố thì cập nhật theo danh sách phí mới; hóa đơn đã công bố giữ nguyên.
     if (roomId && isPeriod(period)) {

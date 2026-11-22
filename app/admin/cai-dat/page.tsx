@@ -1,25 +1,18 @@
+import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { MoneyInput } from "@/components/MoneyInput";
-import { Flash } from "@/components/Flash";
-import { first, type SP } from "@/lib/params";
 import { getSettings } from "@/lib/queries";
 import { saveSettingsAction } from "../actions";
 
 export const metadata = { title: "Cài đặt" };
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: SP;
-}) {
-  const sp = await searchParams;
+export default async function SettingsPage() {
   const s = await getSettings();
 
   return (
     <main className="flex flex-col gap-4">
-      <Flash ok={first(sp.ok)} error={first(sp.error)} />
       <h1 className="text-lg font-semibold">Cài đặt</h1>
 
-      <form action={saveSettingsAction} className="flex flex-col gap-4">
+      <ActionForm action={saveSettingsAction} className="flex flex-col gap-4">
         <section className="card flex flex-col gap-3">
           <Head icon="🏠" title="Thông tin chung" />
           <T label="Tên nhà trọ" name="house_name" value={s.house_name} />
@@ -82,10 +75,10 @@ export default async function SettingsPage({
           Đổi giá sẽ áp dụng ngay cho hóa đơn tháng hiện tại chưa thu tiền. Hóa
           đơn tháng cũ và hóa đơn đã thu tiền giữ nguyên giá cũ.
         </p>
-        <button type="submit" className="btn-primary">
+        <SubmitButton className="btn-primary" pendingText="Đang lưu...">
           Lưu cài đặt
-        </button>
-      </form>
+        </SubmitButton>
+      </ActionForm>
 
     </main>
   );

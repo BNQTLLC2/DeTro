@@ -1,23 +1,15 @@
 import Link from "next/link";
-import { Flash } from "@/components/Flash";
 import { moneyD } from "@/lib/format";
-import { first, type SP } from "@/lib/params";
 import { listRooms } from "@/lib/queries";
 
 export const metadata = { title: "Quản lý phòng" };
 
-export default async function RoomsPage({
-  searchParams,
-}: {
-  searchParams: SP;
-}) {
-  const sp = await searchParams;
+export default async function RoomsPage() {
   const rooms = await listRooms();
   const occupied = rooms.filter((r) => !r.is_vacant).length;
 
   return (
     <main className="flex flex-col gap-4">
-      <Flash ok={first(sp.ok)} error={first(sp.error)} />
       <div className="flex items-end justify-between gap-3">
         <h1 className="text-lg font-semibold">Quản lý phòng</h1>
         <p className="text-sm text-muted">
