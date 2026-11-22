@@ -261,16 +261,29 @@ export async function listFeeTypes(): Promise<FeeType[]> {
   return (await q("select * from fee_types order by sort, id")).map(toFeeType);
 }
 
-export async function createFeeType(name: string, method: FeeMethod, amount: number): Promise<void> {
+/** Thêm loại phí. Có roomId thì chỉ bật cho phòng đó, các phòng khác để tắt; không có thì bật cho mọi phòng. */
+export async function createFeeType(
+  name: string,
+  method: FeeMethod,
+  amount: number,
+  roomId?: number,
+): Promise<void> {
   const rows = await q(
     `insert into fee_types (name, method, default_amount, sort)
      values ($1, $2, $3, coalesce((select max(sort) from fee_types), 0) + 1) returning id`,
     [name, method, amount],
   );
-  await q(
-    "insert into room_fees (room_id, fee_type_id, enabled) select id, $1, true from rooms on conflict do nothing",
-    [rows[0].id],
-  );
+  if (roomId) {
+    await q(
+      "insert into room_fees (room_id, fee_type_id, enabled) select id, $1, (id = $2) from rooms on conflict do nothing",
+      [rows[0].id, roomId],
+    );
+  } else {
+    await q(
+      "insert into room_fees (room_id, fee_type_id, enabled) select id, $1, true from rooms on conflict do nothing",
+      [rows[0].id],
+    );
+  }
 }
 
 export async function updateFeeType(

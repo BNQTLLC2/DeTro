@@ -236,17 +236,24 @@ function methodOf(fd: FormData): FeeMethod {
 export async function createFeeTypeAction(fd: FormData) {
   await requireAdmin();
   const name = str(fd, "name");
-  await run("/admin/cai-dat", "Đã thêm loại phí. Phí mới được bật cho mọi phòng, tắt hoặc đổi mức ở mục Phòng.", async () => {
-    if (!name) throw new Error("Hãy nhập tên loại phí.");
-    await Q.createFeeType(name, methodOf(fd), Math.max(intOf(fd, "amount"), 0));
-  });
+  const roomId = intOf(fd, "room");
+  await run(
+    safeBack(fd, "/admin/phong"),
+    roomId
+      ? "Đã thêm loại phí cho phòng này. Các phòng khác đang tắt, bật ở trang từng phòng."
+      : "Đã thêm loại phí.",
+    async () => {
+      if (!name) throw new Error("Hãy nhập tên loại phí.");
+      await Q.createFeeType(name, methodOf(fd), Math.max(intOf(fd, "amount"), 0), roomId || undefined);
+    },
+  );
 }
 
 export async function updateFeeTypeAction(fd: FormData) {
   await requireAdmin();
   const id = intOf(fd, "id");
   const name = str(fd, "name");
-  await run("/admin/cai-dat", "Đã lưu loại phí.", async () => {
+  await run(safeBack(fd, "/admin/phong"), "Đã lưu loại phí.", async () => {
     if (!name) throw new Error("Tên loại phí không được để trống.");
     await Q.updateFeeType(id, name, methodOf(fd), Math.max(intOf(fd, "amount"), 0), fd.get("active") === "on");
   });
@@ -255,7 +262,7 @@ export async function updateFeeTypeAction(fd: FormData) {
 export async function deleteFeeTypeAction(fd: FormData) {
   await requireAdmin();
   const id = intOf(fd, "id");
-  await run("/admin/cai-dat", "Đã xóa loại phí. Hóa đơn cũ không bị ảnh hưởng.", async () => {
+  await run(safeBack(fd, "/admin/phong"), "Đã xóa loại phí. Hóa đơn cũ không bị ảnh hưởng.", async () => {
     await Q.deleteFeeType(id);
   });
 }
