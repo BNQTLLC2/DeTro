@@ -149,11 +149,10 @@ export async function saveRoomAction(fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const id = intOf(fd, "id");
   return run("Đã lưu thông tin phòng.", async () => {
-    const name = str(fd, "name");
-    if (!name) throw new Error("Tên phòng không được để trống.");
     // Tiền cọc & ngày chốt số không còn nhập trên form: giữ nguyên giá trị hiện có.
     const current = await Q.getRoom(id);
     if (!current) throw new Error("Không tìm thấy phòng.");
+    const name = current.name; // tên phòng không sửa trên form nữa
     await Q.saveRoom(id, {
       name,
       rent: Math.max(intOf(fd, "rent"), 0),
