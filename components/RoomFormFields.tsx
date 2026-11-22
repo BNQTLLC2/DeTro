@@ -67,11 +67,13 @@ export function RoomFormFields({
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
           aria-label={`Phòng ${roomName}. Bấm để chọn phòng khác`}
-          className="flex h-[72px] w-[72px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-transparent bg-accent-soft leading-none text-accent transition-colors hover:border-accent"
+          className="flex min-h-[76px] min-w-[76px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-transparent bg-accent-soft px-3 py-2.5 leading-none text-accent transition-colors hover:border-accent"
         >
-          <span className="text-xs font-bold tracking-wide">{floor ? `TẦNG ${floor}` : "PHÒNG"}</span>
-          <span className="mt-1 text-2xl font-extrabold">{roomName}</span>
-          <span aria-hidden className="mt-0.5 text-xs opacity-70">▾</span>
+          <span className="whitespace-nowrap text-xs font-bold tracking-wide">{floor ? `TẦNG ${floor}` : "PHÒNG"}</span>
+          <span className="flex items-center gap-1 whitespace-nowrap text-2xl font-extrabold">
+            {roomName}
+            <span aria-hidden className="text-xs opacity-70">▾</span>
+          </span>
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-extrabold">Phòng {roomName}</h1>
