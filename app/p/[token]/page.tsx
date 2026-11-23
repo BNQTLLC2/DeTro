@@ -56,27 +56,39 @@ export default async function TenantPage({
   await autoPublishRent(room.id); // đến ngày thu thì tự công bố tiền trọ
   const [settings, invoices] = await Promise.all([getSettings(), listVisibleInvoices(room.id)]);
 
-  const header = (
-    <header className="mb-4 flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-sm text-muted">{settings.house_name}</p>
-        <h1 className="text-3xl font-bold leading-tight">{room.name}</h1>
-        <p className="text-sm text-muted">
-          {room.tenant_name ? `${room.tenant_name} · ` : ""}
-          {room.occupants} người
-        </p>
+  // Đầu trang: cùng khuôn với các thẻ bên dưới (biểu tượng tròn + tiêu đề), phần chọn tháng gộp chung một thẻ
+  const roomTitle = /^phòng\b/i.test(room.name) ? room.name : `Phòng ${room.name}`;
+  const header = (months: React.ReactNode) => (
+    <header className="card flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 text-sm font-medium text-muted">{settings.house_name}</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <FontSizeToggle />
+          <ThemeToggle />
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <FontSizeToggle />
-        <ThemeToggle />
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 11 12 3l9 8M5 10v10h14V10M10 20v-6h4v6" />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold leading-tight">{roomTitle}</h1>
+          <p className="text-sm text-muted">
+            {room.tenant_name ? `${room.tenant_name} · ` : ""}
+            {room.occupants} người
+          </p>
+        </div>
       </div>
+      {months}
     </header>
   );
 
   if (invoices.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-md px-4 py-6">
-        {header}
+      <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
+        {header(null)}
         <p className="card text-sm text-muted">
           Chưa có hóa đơn nào được gửi lên. Khi chủ trọ công bố hóa đơn, bạn sẽ thấy ở đây. Hãy lưu lại link này để xem
           lại.
@@ -178,32 +190,31 @@ export default async function TenantPage({
           <PaymentWatcher key={p.part} token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} />
         ) : null,
       )}
-      {header}
-
-      {/* Chọn tháng */}
-      <section aria-labelledby="months" className="flex flex-col gap-2">
-        <h2 id="months" className="text-sm font-semibold">
-          Chọn tháng để xem lại
-        </h2>
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-          {[...invoices].reverse().map((i) => {
-            const active = i.period === inv.period;
-            return (
-              <Link
-                key={i.period}
-                href={`/p/${token}?m=${i.period}`}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 min-w-[112px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
-                  active ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"
-                }`}
-              >
-                <span className="text-sm font-bold">Tháng {periodLabel(i.period)}</span>
-                <span className="text-xs font-medium">{invState(i) ? "Chưa đóng" : "Đã đóng"}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      {header(
+        <section aria-labelledby="months" className="flex flex-col gap-2 border-t border-line pt-3">
+          <h2 id="months" className="text-sm font-semibold">
+            Chọn tháng để xem lại
+          </h2>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+            {[...invoices].reverse().map((i) => {
+              const active = i.period === inv.period;
+              return (
+                <Link
+                  key={i.period}
+                  href={`/p/${token}?m=${i.period}`}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex min-h-14 min-w-[112px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
+                    active ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"
+                  }`}
+                >
+                  <span className="text-sm font-bold">Tháng {periodLabel(i.period)}</span>
+                  <span className="text-xs font-medium">{invState(i) ? "Chưa đóng" : "Đã đóng"}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>,
+      )}
 
       {/* Hai đợt thu */}
       {rentShown && otherShown && rentPaid === otherPaid ? (
