@@ -115,6 +115,21 @@ export default async function TenantPage({
   ].filter((p) => p.amount > 0);
   const partsTotal = parts.reduce((s, p) => s + p.amount, 0);
 
+  // Các khoản bên trong nhóm "Điện, nước & phí khác" (hiện trong thẻ thu tiền)
+  const otherItems: Item[] = otherShown
+    ? [
+        ...(res.elecAmount > 0
+          ? [{ kind: "elec" as const, name: "Tiền điện", detail: `${n1(res.kwh)} số × ${moneyD(inv.elec_price)}`, amount: res.elecAmount }]
+          : []),
+        ...(res.waterAmount > 0
+          ? [{ kind: "water" as const, name: "Tiền nước", detail: `${n1(res.m3)} khối`, amount: res.waterAmount }]
+          : []),
+        ...inv.fees.filter((f) => f.amount !== 0).map((f) => ({ kind: "fee" as const, name: f.name, detail: f.detail, amount: f.amount })),
+        ...inv.adjustments.filter((a) => a.amount !== 0).map((a) => ({ kind: "fee" as const, name: a.name, amount: a.amount })),
+      ]
+    : [];
+  const monthTitle = `Tháng ${periodLabel(inv.period)}`;
+
   const last6 = publishedList.slice(-6);
   const chartData = last6.map((i) => ({ i, r: invoiceResult(i) }));
 
@@ -196,18 +211,23 @@ export default async function TenantPage({
       {rentShown && otherShown && rentPaid === otherPaid ? (
         // Hai đợt cùng đã đóng hoặc cùng chưa đóng (cùng một lần chuyển khoản): gộp thành một thẻ
         <MergedCollectCard
-          title={`Tiền trọ, điện, nước và các phí khác ${periodName(inv.period)}`}
+          title={rentPaid ? "Tổng số tiền đã đóng" : "Tổng số tiền phải đóng"}
+          month={monthTitle}
           paid={rentPaid}
           lines={[
             {
               label: "Tiền trọ",
+              short: "tiền trọ",
+              items: [],
               amount: inv.rent,
               range: `Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`,
               due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
               paidAt: inv.rent_paid_at,
             },
             {
-              label: "Điện, nước và các phí khác",
+              label: "Điện, nước & phí khác",
+              short: "điện, nước, phí khác",
+              items: otherItems,
               amount: res.othersTotal,
               range: `Kỳ tính: ${periodRange(inv.period, room.billing_day)}`,
               due: feeDueDate(inv.period, room.billing_day, settings.fee_day),
@@ -219,7 +239,8 @@ export default async function TenantPage({
         <>
       {rentShown ? (
           <CollectCard
-            title={`Tiền trọ ${periodName(inv.period)}`}
+            title="Tiền trọ"
+            month={monthTitle}
             amount={inv.rent}
             paid={rentPaid}
             paidAt={inv.rent_paid_at}
@@ -229,7 +250,9 @@ export default async function TenantPage({
         ) : null}
         {otherShown ? (
           <CollectCard
-            title={`Điện, nước và các phí khác (nếu có) ${periodName(inv.period)}`}
+            title="Điện, nước & phí khác"
+            month={monthTitle}
+            items={otherItems}
             amount={res.othersTotal}
             paid={otherPaid}
             paidAt={inv.paid_at}
@@ -545,6 +568,8 @@ export default async function TenantPage({
 
 function CollectCard({
   title,
+  month,
+  items,
   amount,
   paid,
   paidAt,
@@ -552,6 +577,8 @@ function CollectCard({
   due,
 }: {
   title: string;
+  month: string;
+  items?: Item[];
   amount: number;
   paid: boolean;
   paidAt: string | null;
@@ -560,18 +587,22 @@ function CollectCard({
 }) {
   return (
     <section className="card flex flex-col gap-1">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-muted">{title}</p>
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2">
+        <div className="min-w-[11rem] flex-1">
+          <p className="text-lg font-bold leading-tight">{title}</p>
+          <p className="whitespace-nowrap text-sm text-muted">{month}</p>
+        </div>
         <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
           {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(amount)}</p>
       <p className="text-sm text-muted">{range}</p>
+      {items && items.length > 0 ? <ItemList items={items} className="mt-2 rounded-xl border border-line px-3" /> : null}
       {paid && paidAt ? (
-        <p className="text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
+        <p className="mt-1 text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
       ) : (
-        <p className="text-sm font-semibold text-bad">Hạn đóng tiền: {due}</p>
+        <p className="mt-1 text-sm font-semibold text-bad">Hạn đóng tiền: {due}</p>
       )}
     </section>
   );
@@ -579,53 +610,100 @@ function CollectCard({
 
 function MergedCollectCard({
   title,
+  month,
   paid,
   lines,
 }: {
   title: string;
+  month: string;
   paid: boolean;
-  lines: { label: string; amount: number; range: string; due: string; paidAt: string | null }[];
+  lines: { label: string; short: string; items: Item[]; amount: number; range: string; due: string; paidAt: string | null }[];
 }) {
   const total = lines.reduce((t, l) => t + l.amount, 0);
   const dues = [...new Set(lines.map((l) => l.due))];
   const paidDates = [...new Set(lines.map((l) => l.paidAt).filter((d): d is string => !!d))];
   return (
     <section className="card flex flex-col gap-1">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-muted">{title}</p>
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2">
+        <div className="min-w-[11rem] flex-1">
+          <p className="text-lg font-bold leading-tight">{title}</p>
+          <p className="whitespace-nowrap text-sm text-muted">{month}</p>
+        </div>
         <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
           {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(total)}</p>
-      <ul className="mt-1 flex flex-col divide-y divide-line text-sm">
+      <div className="mt-2 flex flex-col gap-3">
         {lines.map((l) => (
-          <li key={l.label} className="flex items-start justify-between gap-3 py-2">
-            <span className="min-w-0">
-              <span className="block font-medium">{l.label}</span>
-              <span className="block text-muted">{l.range}</span>
-            </span>
-            <span className="shrink-0 font-semibold">{moneyD(l.amount)}</span>
-          </li>
+          <div key={l.label} className="overflow-hidden rounded-xl border border-line">
+            {/* Mọi nhóm cùng một khuôn: dòng đầu có tên, kỳ tính và tổng của nhóm; các khoản (nếu có) nằm bên dưới */}
+            <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 bg-accent-soft px-3 py-3">
+              <p className="min-w-0 font-bold leading-tight">{l.label}</p>
+              <p className="whitespace-nowrap text-xl font-bold">{moneyD(l.amount)}</p>
+              <p className="col-span-2 text-sm text-muted">{l.range}</p>
+            </div>
+            {l.items.length > 0 ? <ItemList items={l.items} className="border-t border-line px-3" /> : null}
+          </div>
         ))}
-      </ul>
+      </div>
       {paid && paidDates.length > 0 ? (
-        <p className="text-sm font-semibold text-ok">
+        <p className="mt-1 text-sm font-semibold text-ok">
           {paidDates.length === 1
             ? `Đã nhận tiền ngày ${dmy(new Date(paidDates[0] + "T00:00:00Z"))}`
             : `Đã nhận tiền: ${lines
                 .filter((l) => l.paidAt)
-                .map((l) => `${l.label.startsWith("Tiền trọ") ? "tiền trọ" : "điện, nước"} ngày ${dmy(new Date(l.paidAt! + "T00:00:00Z"))}`)
+                .map((l) => `${l.short} ngày ${dmy(new Date(l.paidAt! + "T00:00:00Z"))}`)
                 .join(", ")}`}
         </p>
       ) : !paid ? (
-        <p className="text-sm font-semibold text-bad">
+        <p className="mt-1 text-sm font-semibold text-bad">
           {dues.length === 1
             ? `Hạn đóng tiền: ${dues[0]}`
-            : `Hạn đóng tiền: ${lines.map((l) => `${l.label.startsWith("Tiền trọ") ? "tiền trọ" : "điện, nước"} ${l.due}`).join(", ")}`}
+            : `Hạn đóng tiền: ${lines.map((l) => `${l.short} ${l.due}`).join(", ")}`}
         </p>
       ) : null}
     </section>
+  );
+}
+
+type Item = { kind: "elec" | "water" | "fee"; name: string; detail?: string; amount: number };
+
+const ITEM_ICON: Record<Item["kind"], { color: string; d: string }> = {
+  elec: { color: "var(--c-elec)", d: "M13 2L4 14h7l-1 8 9-12h-7l1-8z" },
+  water: { color: "var(--c-water)", d: "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" },
+  fee: { color: "var(--c-trash)", d: "M5 7h14M5 12h14M5 17h9" },
+};
+
+/** Từng khoản trong một nhóm: chữ nhỏ, số tiền nhạt và không đậm để không lấn át tổng của nhóm. */
+function ItemList({ items, className = "" }: { items: Item[]; className?: string }) {
+  return (
+    <ul className={className}>
+      {items.map((it, i) => {
+        const ic = ITEM_ICON[it.kind];
+        return (
+          <li
+            key={`${it.name}${i}`}
+            className="relative grid grid-cols-[30px_1fr_auto] items-center gap-x-3 py-2.5 not-last:after:absolute not-last:after:-bottom-2.5 not-last:after:left-3.5 not-last:after:top-10 not-last:after:w-0.5 not-last:after:rounded-sm not-last:after:bg-line not-last:after:content-['']"
+          >
+            <span
+              aria-hidden="true"
+              className="relative z-10 flex size-[30px] items-center justify-center rounded-full"
+              style={{ color: ic.color, background: `color-mix(in srgb, ${ic.color} 18%, transparent)` }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={ic.d} />
+              </svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block font-medium leading-snug">{it.name}</span>
+              {it.detail ? <span className="block text-xs leading-snug text-muted">{it.detail}</span> : null}
+            </span>
+            <span className="whitespace-nowrap text-right font-medium text-muted">{moneyD(it.amount)}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
