@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeFees, computeInvoice, type BillingInput, type FeeType, type RoomFee } from "@/lib/billing";
-import { feeDueDate, isRentPeriod, normalizePhone, periodLabel, periodName, periodRange, periodShort, rentDay, rentDueDate, rentForPeriod, rentLabel, rentRange, shiftPeriod, transferNote } from "@/lib/format";
+import { feeDueDate, isRentPeriod, normalizePhone, periodLabel, periodName, periodRange, periodShort, rentDay, rentDueDate, rentForPeriod, rentLabel, rentRange, rentRangeFull, shiftPeriod, transferNote } from "@/lib/format";
 
 const base: BillingInput = {
   rent: 2800000,
@@ -154,5 +154,6 @@ describe("format", () => {
     expect(rentLabel(1)).toBe("Tiền trọ");
     // kỳ thuê 3 tháng: 29/10 – 28/1
     expect(rentRange("2027-01", "2026-10-29", 1, 3)).toBe("29/10 – 28/01");
+    expect(rentRangeFull("2027-02", "2026-08-16", 1, 3)).toBe("16/11/2026 – 15/02/2027");
   });
 });

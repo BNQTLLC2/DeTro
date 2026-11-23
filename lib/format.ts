@@ -127,6 +127,16 @@ export function rentLabel(cycle: number): string {
   return cycle > 1 ? `Tiền trọ ${cycle} tháng` : "Tiền trọ";
 }
 
+/** Chu kỳ thuê đầy đủ ngày/tháng/năm, ví dụ "16/11/2026 – 15/02/2027" (dùng cho tiền trọ thu nhiều tháng một lần). */
+export function rentRangeFull(period: string, moveInDate: string, billingDay: number, cycle = 1): string {
+  const day = rentDay(moveInDate, billingDay);
+  const [y, m] = period.split("-").map(Number);
+  const prev = shiftPeriod(period, -Math.max(cycle, 1)).split("-").map(Number);
+  const start = clampDay(prev[0], prev[1], day);
+  const end = new Date(clampDay(y, m, day).getTime() - 86400000);
+  return `${dmy(start)} – ${dmy(end)}`;
+}
+
 /** Kỳ thuê của tiền trọ: từ ngày vào ở `cycle` tháng trước đến hết ngày liền trước ngày vào ở tháng này. */
 export function rentRange(period: string, moveInDate: string, billingDay: number, cycle = 1): string {
   const day = rentDay(moveInDate, billingDay);

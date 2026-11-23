@@ -10,6 +10,7 @@ import {
   feeDueDate,
   rentDueDate,
   rentLabel,
+  rentRangeFull,
   moneyD,
   money,
   periodLabel,
@@ -123,6 +124,11 @@ export default async function TenantPage({
   const prevRes = prev ? invoiceResult(prev) : null;
 
   const rentTitle = rentLabel(room.rent_cycle); // "Tiền trọ" hoặc "Tiền trọ 3 tháng"
+  // Tiền trọ thu nhiều tháng một lần thì ghi rõ chu kỳ (từ ngày đến ngày); thu mỗi tháng thì không cần.
+  const rentCycleText =
+    room.rent_cycle > 1
+      ? `Chu kỳ: ${rentRangeFull(inv.period, room.move_in_date, room.billing_day, room.rent_cycle)}`
+      : undefined;
 
   // Các phần của tổng tiền, bỏ khoản bằng 0
   const parts = [
@@ -251,6 +257,7 @@ export default async function TenantPage({
             {
               label: rentTitle,
               short: rentTitle.toLowerCase(),
+              range: rentCycleText,
               items: [],
               amount: inv.rent,
               due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
@@ -271,6 +278,7 @@ export default async function TenantPage({
       {rentShown ? (
           <CollectCard
             title={rentTitle}
+            range={rentCycleText}
             month={monthTitle}
             amount={inv.rent}
             paid={rentPaid}
@@ -592,6 +600,7 @@ function CollectCard({
   title,
   month,
   items,
+  range,
   amount,
   paid,
   partial = false,
@@ -601,6 +610,7 @@ function CollectCard({
   title: string;
   month: string;
   items?: Item[];
+  range?: string;
   amount: number;
   paid: boolean;
   partial?: boolean;
@@ -619,6 +629,7 @@ function CollectCard({
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(amount)}</p>
+      {range ? <p className="text-sm text-muted">{range}</p> : null}
       {items && items.length > 0 ? <ItemList items={items} className="mt-2 rounded-xl border border-line px-3" /> : null}
       {paid && paidAt ? (
         <p className="mt-1 text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
@@ -640,7 +651,7 @@ function MergedCollectCard({
   month: string;
   paid: boolean;
   partial?: boolean;
-  lines: { label: string; short: string; items: Item[]; amount: number; due: string; paidAt: string | null }[];
+  lines: { label: string; short: string; items: Item[]; range?: string; amount: number; due: string; paidAt: string | null }[];
 }) {
   const total = lines.reduce((t, l) => t + l.amount, 0);
   const dues = [...new Set(lines.map((l) => l.due))];
@@ -661,9 +672,10 @@ function MergedCollectCard({
         {lines.map((l) => (
           <div key={l.label} className="overflow-hidden rounded-xl border border-line">
             {/* Mọi nhóm cùng một khuôn: dòng đầu có tên và tổng của nhóm; các khoản (nếu có) nằm bên dưới */}
-            <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 bg-accent-soft px-3 py-3">
+            <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 bg-accent-soft px-3 py-3">
               <p className="min-w-0 font-bold leading-tight">{l.label}</p>
               <p className="whitespace-nowrap text-xl font-bold">{moneyD(l.amount)}</p>
+              {l.range ? <p className="col-span-2 text-sm text-muted">{l.range}</p> : null}
             </div>
             {l.items.length > 0 ? <ItemList items={l.items} className="border-t border-line px-3" /> : null}
           </div>
