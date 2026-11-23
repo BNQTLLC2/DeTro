@@ -9,12 +9,10 @@ import {
   dmy,
   feeDueDate,
   rentDueDate,
-  rentRange,
   moneyD,
   money,
   periodLabel,
   periodName,
-  periodRange,
   periodShort,
   isPeriod,
 } from "@/lib/format";
@@ -220,7 +218,6 @@ export default async function TenantPage({
               short: "tiền trọ",
               items: [],
               amount: inv.rent,
-              range: `Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`,
               due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
               paidAt: inv.rent_paid_at,
             },
@@ -229,7 +226,6 @@ export default async function TenantPage({
               short: "điện, nước, phí khác",
               items: otherItems,
               amount: res.othersTotal,
-              range: `Kỳ tính: ${periodRange(inv.period, room.billing_day)}`,
               due: feeDueDate(inv.period, room.billing_day, settings.fee_day),
               paidAt: inv.paid_at,
             },
@@ -244,7 +240,6 @@ export default async function TenantPage({
             amount={inv.rent}
             paid={rentPaid}
             paidAt={inv.rent_paid_at}
-            range={`Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`}
             due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
           />
         ) : null}
@@ -256,7 +251,6 @@ export default async function TenantPage({
             amount={res.othersTotal}
             paid={otherPaid}
             paidAt={inv.paid_at}
-            range={`Kỳ tính: ${periodRange(inv.period, room.billing_day)}`}
             due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
           />
         ) : (
@@ -271,8 +265,8 @@ export default async function TenantPage({
       {parts.length > 0 ? (
       <section className="card flex flex-col gap-3">
         <div>
-          <h2 className="text-lg font-bold">Tiền của bạn đi vào đâu?</h2>
-          <p className="text-sm text-muted">Mỗi màu là một khoản. Thanh càng dài thì khoản đó càng tốn nhiều.</p>
+          <h2 className="text-lg font-bold">Chi phí tháng này gồm những gì?</h2>
+          <p className="text-sm text-muted">Tỷ lệ từng khoản trong tổng số tiền của tháng này.</p>
         </div>
         <div
           className="flex h-5 gap-[3px]"
@@ -573,7 +567,6 @@ function CollectCard({
   amount,
   paid,
   paidAt,
-  range,
   due,
 }: {
   title: string;
@@ -582,7 +575,6 @@ function CollectCard({
   amount: number;
   paid: boolean;
   paidAt: string | null;
-  range: string;
   due: string;
 }) {
   return (
@@ -597,7 +589,6 @@ function CollectCard({
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(amount)}</p>
-      <p className="text-sm text-muted">{range}</p>
       {items && items.length > 0 ? <ItemList items={items} className="mt-2 rounded-xl border border-line px-3" /> : null}
       {paid && paidAt ? (
         <p className="mt-1 text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
@@ -617,7 +608,7 @@ function MergedCollectCard({
   title: string;
   month: string;
   paid: boolean;
-  lines: { label: string; short: string; items: Item[]; amount: number; range: string; due: string; paidAt: string | null }[];
+  lines: { label: string; short: string; items: Item[]; amount: number; due: string; paidAt: string | null }[];
 }) {
   const total = lines.reduce((t, l) => t + l.amount, 0);
   const dues = [...new Set(lines.map((l) => l.due))];
@@ -637,11 +628,10 @@ function MergedCollectCard({
       <div className="mt-2 flex flex-col gap-3">
         {lines.map((l) => (
           <div key={l.label} className="overflow-hidden rounded-xl border border-line">
-            {/* Mọi nhóm cùng một khuôn: dòng đầu có tên, kỳ tính và tổng của nhóm; các khoản (nếu có) nằm bên dưới */}
-            <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 bg-accent-soft px-3 py-3">
+            {/* Mọi nhóm cùng một khuôn: dòng đầu có tên và tổng của nhóm; các khoản (nếu có) nằm bên dưới */}
+            <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 bg-accent-soft px-3 py-3">
               <p className="min-w-0 font-bold leading-tight">{l.label}</p>
               <p className="whitespace-nowrap text-xl font-bold">{moneyD(l.amount)}</p>
-              <p className="col-span-2 text-sm text-muted">{l.range}</p>
             </div>
             {l.items.length > 0 ? <ItemList items={l.items} className="border-t border-line px-3" /> : null}
           </div>
