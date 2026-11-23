@@ -24,6 +24,7 @@ import {
   autoPublishRent,
   listVisibleInvoices,
   receivedFor,
+  receivedForInvoices,
   type Invoice,
 } from "@/lib/queries";
 import { roomVa, sepayQrUrl, type PayTarget } from "@/lib/sepay";
@@ -40,6 +41,14 @@ const n1 = (n: number) => {
   const [int, dec] = String(Math.round(n * 100) / 100).split(".");
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return dec ? `${grouped},${dec}` : grouped;
+};
+
+type Status = "paid" | "partial" | "unpaid";
+const STATUS_LABEL: Record<Status, string> = { paid: "Đã đóng", partial: "Chưa đóng đủ", unpaid: "Chưa đóng" };
+const STATUS_CHIP: Record<Status, string> = {
+  paid: "bg-ok-bg text-ok",
+  partial: "bg-warn-bg text-warn",
+  unpaid: "bg-bad-bg text-bad",
 };
 
 export default async function TenantPage({
@@ -173,11 +182,18 @@ export default async function TenantPage({
   const otherPay = otherShown && !merged ? await payInfo("other", res.othersTotal, otherPaid) : null;
   const allPay = merged ? await payInfo("all", inv.rent + res.othersTotal, false) : null;
   const payList = [allPay, rentPay, otherPay];
-  const invState = (i: Invoice) => {
+  // Trạng thái từng tháng: đã đóng / chưa đóng đủ (đã nhận một phần) / chưa đóng
+  const recv = await receivedForInvoices(invoices);
+  const invStatus = (i: Invoice): Status => {
+    const r = recv.get(i.id) ?? { rent: 0, other: 0 };
     const rentOpen = i.rent_published && i.rent > 0 && !i.rent_paid_at;
     const otherOpen = i.published && !i.paid_at;
-    return rentOpen || otherOpen;
+    if (!rentOpen && !otherOpen) return "paid";
+    return (rentOpen ? r.rent : 0) + (otherOpen ? r.other : 0) > 0 ? "partial" : "unpaid";
   };
+  const cur = recv.get(inv.id) ?? { rent: 0, other: 0 };
+  const rentPartial = !rentPaid && cur.rent > 0;
+  const otherPartial = !otherPaid && cur.other > 0;
   const invAmount = (i: Invoice) => {
     const r = invoiceResult(i);
     return (i.rent_published ? i.rent : 0) + (i.published ? r.othersTotal : 0);
@@ -208,7 +224,7 @@ export default async function TenantPage({
                   }`}
                 >
                   <span className="text-sm font-bold">Tháng {periodLabel(i.period)}</span>
-                  <span className="text-xs font-medium">{invState(i) ? "Chưa đóng" : "Đã đóng"}</span>
+                  <span className="text-xs font-medium">{STATUS_LABEL[invStatus(i)]}</span>
                 </Link>
               );
             })}
@@ -223,6 +239,7 @@ export default async function TenantPage({
           title={rentPaid ? "Tổng số tiền đã đóng" : "Tổng số tiền phải đóng"}
           month={monthTitle}
           paid={rentPaid}
+          partial={rentPartial || otherPartial}
           lines={[
             {
               label: "Tiền trọ",
@@ -250,6 +267,7 @@ export default async function TenantPage({
             month={monthTitle}
             amount={inv.rent}
             paid={rentPaid}
+            partial={rentPartial}
             paidAt={inv.rent_paid_at}
             due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
           />
@@ -261,6 +279,7 @@ export default async function TenantPage({
             items={otherItems}
             amount={res.othersTotal}
             paid={otherPaid}
+            partial={otherPartial}
             paidAt={inv.paid_at}
             due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
           />
@@ -346,8 +365,8 @@ export default async function TenantPage({
           <Compare
             title="Dùng nhiều hay ít hơn tháng trước?"
             colorClass="bg-c-elec"
-            cur={{ label: `Tháng ${Number(inv.period.split("-")[1])}`, value: res.kwh }}
-            prev={prevRes && prev ? { label: `Tháng ${Number(prev.period.split("-")[1])}`, value: prevRes.kwh } : null}
+            cur={{ label: `Tháng ${periodShort(inv.period).slice(1)}`, value: res.kwh }}
+            prev={prevRes && prev ? { label: `Tháng ${periodShort(prev.period).slice(1)}`, value: prevRes.kwh } : null}
             sentence={
               prevRes
                 ? res.kwh > prevRes.kwh
@@ -382,8 +401,8 @@ export default async function TenantPage({
           <Compare
             title="Dùng nhiều hay ít hơn tháng trước?"
             colorClass="bg-c-water"
-            cur={{ label: `Tháng ${Number(inv.period.split("-")[1])}`, value: res.m3 }}
-            prev={prevRes && prev ? { label: `Tháng ${Number(prev.period.split("-")[1])}`, value: prevRes.m3 } : null}
+            cur={{ label: `Tháng ${periodShort(inv.period).slice(1)}`, value: res.m3 }}
+            prev={prevRes && prev ? { label: `Tháng ${periodShort(prev.period).slice(1)}`, value: prevRes.m3 } : null}
             sentence={
               prevRes
                 ? res.m3 > prevRes.m3
@@ -559,8 +578,8 @@ export default async function TenantPage({
                   <span className="block font-semibold">Tháng {periodLabel(i.period)}</span>
                   <span className="block text-sm text-muted">{moneyD(invAmount(i))}</span>
                 </span>
-                <span className={`chip ${invState(i) ? "bg-bad-bg text-bad" : "bg-ok-bg text-ok"}`}>
-                  {invState(i) ? "Chưa đóng" : "Đã đóng"}
+                <span className={`chip ${STATUS_CHIP[invStatus(i)]}`}>
+                  {STATUS_LABEL[invStatus(i)]}
                 </span>
               </Link>
             </li>
@@ -577,6 +596,7 @@ function CollectCard({
   items,
   amount,
   paid,
+  partial = false,
   paidAt,
   due,
 }: {
@@ -585,6 +605,7 @@ function CollectCard({
   items?: Item[];
   amount: number;
   paid: boolean;
+  partial?: boolean;
   paidAt: string | null;
   due: string;
 }) {
@@ -595,8 +616,8 @@ function CollectCard({
           <p className="text-lg font-bold leading-tight">{title}</p>
           <p className="whitespace-nowrap text-sm text-muted">{month}</p>
         </div>
-        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
-          {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
+        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : partial ? "bg-warn-bg text-warn" : "bg-bad-bg text-bad"}`}>
+          {paid ? "Đã đóng tiền" : partial ? "Chưa đóng đủ" : "Chưa thanh toán"}
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(amount)}</p>
@@ -614,11 +635,13 @@ function MergedCollectCard({
   title,
   month,
   paid,
+  partial = false,
   lines,
 }: {
   title: string;
   month: string;
   paid: boolean;
+  partial?: boolean;
   lines: { label: string; short: string; items: Item[]; amount: number; due: string; paidAt: string | null }[];
 }) {
   const total = lines.reduce((t, l) => t + l.amount, 0);
@@ -631,8 +654,8 @@ function MergedCollectCard({
           <p className="text-lg font-bold leading-tight">{title}</p>
           <p className="whitespace-nowrap text-sm text-muted">{month}</p>
         </div>
-        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
-          {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
+        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : partial ? "bg-warn-bg text-warn" : "bg-bad-bg text-bad"}`}>
+          {paid ? "Đã đóng tiền" : partial ? "Chưa đóng đủ" : "Chưa thanh toán"}
         </span>
       </div>
       <p className="text-4xl font-bold leading-tight">{moneyD(total)}</p>

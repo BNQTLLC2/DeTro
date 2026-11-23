@@ -29,20 +29,29 @@ export function shiftPeriod(period: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/** "2026-11" -> "11/2026" */
+/**
+ * Tháng sử dụng của một kỳ. Kỳ tính luôn bắt đầu từ tháng trước ngày chốt, nên kỳ "2026-11"
+ * (ví dụ 02/10 – 01/11, chốt số đầu tháng 11) là số điện nước của tháng 10.
+ * Khóa kỳ trong cơ sở dữ liệu vẫn giữ nguyên, chỉ tên hiển thị đổi.
+ */
+export function usageMonth(period: string): string {
+  return shiftPeriod(period, -1);
+}
+
+/** "2026-11" -> "10/2026" (tháng sử dụng) */
 export function periodLabel(period: string): string {
-  const [y, m] = period.split("-");
+  const [y, m] = usageMonth(period).split("-");
   return `${Number(m)}/${y}`;
 }
 
-/** "2026-11" -> "tháng 11/2026" */
+/** "2026-11" -> "tháng 10/2026" */
 export function periodName(period: string): string {
   return `tháng ${periodLabel(period)}`;
 }
 
-/** "2026-11" -> "T11" */
+/** "2026-11" -> "T10" */
 export function periodShort(period: string): string {
-  return `T${Number(period.split("-")[1])}`;
+  return `T${Number(usageMonth(period).split("-")[1])}`;
 }
 
 function daysInMonth(y: number, m: number): number {
@@ -137,5 +146,7 @@ export function transferNote(roomName: string, period: string): string {
     .replace(/[^a-zA-Z0-9 ]/g, "")
     .trim()
     .toUpperCase();
-  return `${base} ${periodLabel(period)}`.trim();
+  // Nội dung chuyển khoản giữ theo khóa kỳ (tháng/năm của kỳ), không đổi theo tên hiển thị.
+  const [y, m] = period.split("-");
+  return `${base} ${Number(m)}/${y}`.trim();
 }

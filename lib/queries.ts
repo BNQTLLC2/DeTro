@@ -721,6 +721,15 @@ export async function receivedByInvoice(): Promise<Map<number, Record<PaymentPar
   return out;
 }
 
+/** Số tiền đã nhận của từng hóa đơn trong danh sách, tách theo đợt thu (để hiện "chưa đóng đủ"). */
+export async function receivedForInvoices(invs: Invoice[]): Promise<Map<number, Record<PaymentPart, number>>> {
+  const out = new Map<number, Record<PaymentPart, number>>();
+  if (invs.length === 0) return out;
+  const sums = await paymentSums(invs.map((i) => i.id));
+  for (const inv of invs) out.set(inv.id, splitReceived(inv, sums.get(inv.id) ?? { rent: 0, other: 0, all: 0 }));
+  return out;
+}
+
 export async function receivedFor(invoiceId: number, part: PaymentPart = "other"): Promise<number> {
   const inv = await getInvoiceById(invoiceId);
   if (!inv) return 0;

@@ -109,6 +109,16 @@ export default async function EnterReadings({
         adjustments: [],
       });
   const input = inv ? invoiceInput(inv) : null;
+  const elecDone = res.elecState === "ok";
+  const waterDone = res.waterState === "ok";
+  const roomChip =
+    elecDone && waterDone
+      ? { text: "Đủ số", cls: "bg-ok-bg text-ok" }
+      : elecDone
+        ? { text: "Thiếu nước", cls: "bg-warn-bg text-warn" }
+        : waterDone
+          ? { text: "Thiếu điện", cls: "bg-warn-bg text-warn" }
+          : { text: "Chưa nhập", cls: "bg-idle-bg text-muted" };
   const published = !!inv?.published;
   const price = inv?.elec_price ?? settings.elec_price;
   const quotaPer = inv?.water_quota ?? settings.water_quota;
@@ -128,50 +138,55 @@ export default async function EnterReadings({
           const i = byRoom.get(r.id);
           const rr = i ? invoiceResult(i) : null;
           const active = r.id === selected.id;
-          const done =
-            (rr?.elecState === "ok" ? 1 : 0) +
-            (rr?.waterState === "ok" ? 1 : 0);
+          const elecOk = rr?.elecState === "ok";
+          const waterOk = rr?.waterState === "ok";
           return (
             <Link
               key={r.id}
               href={`/admin/nhap-so?m=${period}&room=${r.id}`}
               aria-current={active ? "true" : undefined}
-              className={`flex min-w-[84px] flex-1 shrink-0 basis-0 flex-col items-center justify-center gap-1 rounded-xl border-2 px-3 py-2 no-underline ${
+              className={`flex min-w-[88px] flex-1 shrink-0 basis-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2 no-underline ${
                 active
                   ? "border-accent bg-accent-soft"
                   : "border-line bg-surface"
               }`}
             >
-              <span className="whitespace-nowrap text-sm font-bold">
+              <span className="whitespace-nowrap text-base font-bold">
                 {r.name}
               </span>
-              <span
-                className="flex items-center gap-1"
-                title={`Điện ${rr?.elecState === "ok" ? "đã" : "chưa"} nhập, nước ${rr?.waterState === "ok" ? "đã" : "chưa"} nhập`}
-              >
-                <Dot on={rr?.elecState === "ok"} color="bg-c-elec" />
-                <Dot on={rr?.waterState === "ok"} color="bg-c-water" />
-                <span className="ml-1 text-xs text-muted">{done}/2</span>
+              <span className="flex items-center gap-1.5">
+                <MeterBadge kind="elec" on={elecOk} />
+                <MeterBadge kind="water" on={waterOk} />
+              </span>
+              <span className="sr-only">
+                Điện {elecOk ? "đã" : "chưa"} nhập, nước {waterOk ? "đã" : "chưa"} nhập
               </span>
             </Link>
           );
         })}
       </nav>
-      <p className="-mt-2 mb-4 flex items-center gap-3 text-xs text-muted">
-        <span className="flex items-center gap-1">
-          <Dot on color="bg-c-elec" /> điện đã nhập
-        </span>
-        <span className="flex items-center gap-1">
-          <Dot on color="bg-c-water" /> nước đã nhập
-        </span>
-      </p>
 
-      <section className="mb-3">
-        <h2 className="text-xl font-bold">{selected.name}</h2>
-        <p className="text-sm text-muted">
-          {selected.tenant_name || "Chưa có tên người thuê"} ·{" "}
-          {selected.occupants} người · chốt số ngày {selected.billing_day}
-        </p>
+      <section className="card mb-3 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 11 12 3l9 8M5 10v10h14V10M10 20v-6h4v6" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="whitespace-nowrap text-2xl font-bold leading-tight">
+              {/^phòng\b/i.test(selected.name) ? selected.name : `Phòng ${selected.name}`}
+            </h2>
+            <p className="text-sm text-muted">
+              {selected.tenant_name || "Chưa có tên người thuê"} · {selected.occupants} người
+            </p>
+          </div>
+          <span className={`chip shrink-0 ${roomChip.cls}`}>{roomChip.text}</span>
+        </div>
+        <ul className="flex flex-col border-t border-line">
+          <MeterStatus kind="elec" label="Điện" on={res.elecState === "ok"} />
+          <MeterStatus kind="water" label="Nước" on={res.waterState === "ok"} />
+        </ul>
       </section>
 
       <section className="card mb-3 flex flex-col gap-3 border-l-4 !border-l-c-elec">
@@ -408,12 +423,41 @@ export default async function EnterReadings({
   );
 }
 
-function Dot({ on, color }: { on?: boolean; color: string }) {
+const METER_ICON = {
+  elec: "M13 2L4 14h7l-1 8 9-12h-7l1-8z",
+  water: "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z",
+} as const;
+
+/** Biểu tượng điện/nước: tô màu là đã nhập, viền đứt là chưa nhập. */
+function MeterBadge({ kind, on, size = 24 }: { kind: "elec" | "water"; on: boolean; size?: number }) {
+  const tone = on ? (kind === "elec" ? "border-c-elec bg-c-elec text-white" : "border-c-water bg-c-water text-white") : "border-dashed border-line text-muted";
   return (
     <span
-      className={`size-2.5 rounded-full ${on ? color : "border border-line bg-transparent"}`}
       aria-hidden="true"
-    />
+      style={{ width: size, height: size }}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full border-[1.5px] ${tone}`}
+    >
+      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d={METER_ICON[kind]} />
+      </svg>
+    </span>
+  );
+}
+
+function MeterStatus({ kind, label, on }: { kind: "elec" | "water"; label: string; on: boolean }) {
+  return (
+    <li className="grid grid-cols-[30px_1fr_auto] items-center gap-x-3 border-t border-dashed border-line py-2.5 first:border-t-0">
+      <MeterBadge kind={kind} on={on} size={30} />
+      <span className="font-semibold">{label}</span>
+      <span className={`flex items-center gap-1 text-sm ${on ? "font-semibold text-ok" : "text-muted"}`}>
+        {on ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12.5 10 17.5 19 7.5" />
+          </svg>
+        ) : null}
+        {on ? "Đã nhập" : "Chưa nhập"}
+      </span>
+    </li>
   );
 }
 

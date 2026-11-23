@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeFees, computeInvoice, type BillingInput, type FeeType, type RoomFee } from "@/lib/billing";
-import { feeDueDate, normalizePhone, periodRange, rentDay, rentDueDate, rentRange, shiftPeriod, transferNote } from "@/lib/format";
+import { feeDueDate, normalizePhone, periodLabel, periodName, periodRange, periodShort, rentDay, rentDueDate, rentRange, shiftPeriod, transferNote } from "@/lib/format";
 
 const base: BillingInput = {
   rent: 2800000,
@@ -130,5 +130,12 @@ describe("format", () => {
     expect(feeDueDate("2026-11", 20, 6)).toBe("06/12/2026"); // chốt 20, thu ngày 6 tháng sau
     expect(feeDueDate("2026-11", 3, 6)).toBe("06/11/2026"); // chốt 3, kịp thu ngày 6 cùng tháng
     expect(feeDueDate("2026-12", 20, 6)).toBe("06/01/2027");
+  });
+
+  it("tên tháng hiển thị là tháng sử dụng (kỳ chốt đầu tháng 11 là tháng 10)", () => {
+    expect(periodLabel("2026-11")).toBe("10/2026");
+    expect(periodName("2026-11")).toBe("tháng 10/2026");
+    expect(periodShort("2026-11")).toBe("T10");
+    expect(periodLabel("2026-01")).toBe("12/2025");
   });
 });
