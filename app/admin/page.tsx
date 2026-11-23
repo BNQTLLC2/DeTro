@@ -12,6 +12,7 @@ import {
   shiftPeriod,
 } from "@/lib/format";
 import { first, type SP } from "@/lib/params";
+import { roomVa, vaEnvKey } from "@/lib/sepay";
 import {
   autoPublishRent,
   getSettings,
@@ -189,6 +190,7 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
     .sort(([a], [b]) => (a === "Khác" ? 1 : b === "Khác" ? -1 : a.localeCompare(b)))
     .map(([label, rs]) => ({ label, rows: rs }));
   const unmatchedRecent = recent.filter((p) => p.invoice_id === null).length;
+  const noVa = rooms.filter((r) => !r.is_vacant && roomVa(r.name) === "");
 
   return (
     <main className="flex flex-col gap-4">
@@ -373,11 +375,18 @@ export default async function Overview({ searchParams }: { searchParams: SP }) {
         </details>
       ) : null}
 
-      {settings.bank_code === "" || settings.bank_account === "" ? (
+      {settings.bank_code === "" ? (
         <p className="rounded-xl bg-warn-bg p-3 text-sm text-warn">
-          Chưa cấu hình tài khoản ngân hàng nên hóa đơn của người thuê chưa có
-          mã QR chuyển khoản. Hãy đặt biến môi trường BANK_CODE và BANK_ACCOUNT
+          Chưa cấu hình ngân hàng nên trang người thuê chưa có mã QR chuyển khoản. Hãy đặt biến môi trường BANK_CODE
           trên Vercel rồi deploy lại.
+        </p>
+      ) : null}
+      {noVa.length > 0 ? (
+        <p className="rounded-xl bg-warn-bg p-3 text-sm text-warn">
+          Phòng chưa có tài khoản VA nên chưa hiện mã QR cho người thuê:{" "}
+          <b>{noVa.map((r) => r.name).join(", ")}</b>. Đặt biến môi trường{" "}
+          {noVa.slice(0, 2).map((r) => vaEnvKey(r.name)).join(", ")}
+          {noVa.length > 2 ? "…" : ""} trên Vercel rồi deploy lại.
         </p>
       ) : null}
     </main>

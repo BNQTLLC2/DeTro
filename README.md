@@ -37,19 +37,22 @@ npm run typecheck   # kiểm tra kiểu
 npm test            # test tính tiền và toàn bộ luồng với Postgres thật
 ```
 
-## Thanh toán qua SePay (tự xác nhận đã đóng tiền)
+## Thanh toán qua SePay (mỗi phòng một tài khoản VA)
 
-Trang người thuê có mã VietQR (đã điền sẵn số tiền còn thiếu và nội dung chuyển khoản) cùng nút **Tải mã QR về máy**.
-Khi người thuê chuyển khoản, SePay gọi webhook và hóa đơn tự chuyển sang "Đã đóng tiền".
+Mỗi phòng có một tài khoản định danh (VA) riêng của SePay. Người thuê chuyển khoản vào VA của phòng mình, nên dù họ sửa nội dung chuyển khoản thì tiền vẫn về đúng phòng. Không còn dùng tài khoản chung. Phòng nào chưa khai báo VA thì trang người thuê không hiện mã QR.
 
-1. Trên Vercel đặt biến môi trường tài khoản nhận tiền: `BANK_CODE` (mã VietQR như `MB`, `VCB`, `TCB`, `ACB`, `BIDV`, `VPB`, `VBA`), `BANK_ACCOUNT` (số tài khoản), `BANK_HOLDER` (tên chủ tài khoản).
-2. Tại my.sepay.vn: kết nối tài khoản ngân hàng, vào *Cấu hình công ty > Cấu trúc mã thanh toán* đặt tiền tố (mặc định `TRO`). Nếu dùng tiền tố khác, đặt biến môi trường `SEPAY_PREFIX` cho trùng.
-3. Tại SePay, tạo webhook: sự kiện **Có tiền vào**, URL `https://<tên-miền-của-bạn>/api/sepay`, kiểu chứng thực **API Key**, đặt một khóa bí mật.
-4. Trên Vercel thêm biến môi trường `SEPAY_API_KEY` bằng đúng khóa đó (và `SEPAY_PREFIX` nếu đổi tiền tố), rồi Redeploy. Tài khoản ngân hàng và SePay chỉ cấu hình bằng biến môi trường, không có trong trang Cài đặt.
+1. Tại my.sepay.vn, kết nối ngân hàng (loại hỗ trợ VA) rồi tạo một tài khoản VA cho từng phòng.
+2. Trên Vercel đặt biến môi trường:
+   - `BANK_CODE`: mã VietQR của ngân hàng (ví dụ `BIDV`, `MB`, `OCB`).
+   - `BANK_HOLDER`: tên chủ tài khoản (tùy chọn, hiện trên trang người thuê).
+   - Mỗi phòng một biến `VA_<tên phòng>` chứa số VA. Tên phòng bỏ chữ "Phòng" và dấu: phòng "Phòng 101" thì `VA_101`, phòng "Phòng A2" thì `VA_A2`. Ví dụ `VA_101=96247XXXX101`.
+   - `SEPAY_API_KEY`: khóa bí mật của webhook (bước 3).
+3. Tại SePay tạo webhook: sự kiện **Có tiền vào**, URL `https://<tên-miền-của-bạn>/api/sepay`, kiểu chứng thực **API Key** với đúng khóa ở bước 2, kiểu nội dung JSON. Tắt tùy chọn "bỏ qua nếu không có mã thanh toán" nếu có.
+4. Redeploy sau khi thêm hoặc đổi biến môi trường.
 
-Cách hoạt động: nội dung chuyển khoản dạng `TRO<mã hóa đơn>`; tiền về đủ thì tự đánh dấu đã đóng, thiếu thì hiện số còn lại và QR cập nhật theo.
-Giao dịch không khớp hóa đơn nào được liệt kê ở trang Tổng quan. Mỗi giao dịch SePay chỉ được ghi một lần (chống gọi trùng).
-Lưu ý: một số ngân hàng (ví dụ VietinBank) có thể không cho tùy biến nội dung chuyển khoản, khi đó cần đối chiếu thủ công ở mục "tiền về chưa khớp".
+Cách ghi nhận: webhook SePay gửi kèm `subAccount` (số VA nhận tiền). Hệ thống tìm phòng có VA đó, chọn hóa đơn cũ nhất của phòng còn khoản chờ thu, rồi chọn đợt thu theo số tiền: đúng số còn thiếu của tiền trọ thì tính tiền trọ, đúng số điện, nước, phí khác thì tính khoản đó, còn lại chia cho điện, nước, phí khác trước rồi đến tiền trọ. Đủ tiền thì tự đánh dấu đã thu. Tiền thừa không tự chuyển sang tháng sau.
+Giao dịch vào VA lạ, hoặc VA của phòng không còn khoản nào chờ thu, được liệt kê ở trang Tổng quan (mục "chưa khớp") để bạn đối chiếu và đánh dấu thủ công. Mỗi giao dịch SePay chỉ được ghi một lần (chống gọi trùng).
+Trang Tổng quan cảnh báo các phòng đang thuê mà chưa có biến `VA_...`.
 
 ## Giấu trang đăng nhập (tùy chọn)
 

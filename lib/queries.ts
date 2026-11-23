@@ -11,7 +11,7 @@ import {
   type RoomFee,
 } from "./billing";
 import { currentPeriod, rentDueISO, shiftPeriod, todayVN } from "./format";
-import { isValidPrefix, parsePaymentCode, parsePaymentTarget, type PayTarget, type PaymentPart, type SepayPayload } from "./sepay";
+import { normalizeAccount, roomVa, type PayTarget, type PaymentPart, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
 
@@ -24,16 +24,8 @@ export type Settings = {
   /** Ngày thu các chi phí khác (điện, nước, phí...) hằng tháng. */
   fee_day: number;
   bank_code: string;
-  bank_account: string;
   bank_holder: string;
-  /** Tiền tố mã thanh toán (biến môi trường SEPAY_PREFIX), trùng "Cấu trúc mã thanh toán" bên SePay. */
-  sepay_prefix: string;
 };
-
-function sepayPrefixFromEnv(): string {
-  const p = (process.env.SEPAY_PREFIX ?? "").trim().toUpperCase();
-  return isValidPrefix(p) ? p : "TRO";
-}
 
 export type Room = {
   id: number;
@@ -176,13 +168,11 @@ export async function getSettings(): Promise<Settings> {
     water_high: n("water_high", 25000),
     fee_day: n("fee_day", 6),
     bank_code: (process.env.BANK_CODE ?? "").trim().toUpperCase(),
-    bank_account: (process.env.BANK_ACCOUNT ?? "").replace(/\s/g, ""),
     bank_holder: (process.env.BANK_HOLDER ?? "").trim(),
-    sepay_prefix: sepayPrefixFromEnv(),
   };
 }
 
-export async function saveSettings(p: Partial<Record<Exclude<keyof Settings, "sepay_prefix" | "bank_code" | "bank_account" | "bank_holder">, string | number>>): Promise<void> {
+export async function saveSettings(p: Partial<Record<Exclude<keyof Settings, "bank_code" | "bank_holder">, string | number>>): Promise<void> {
   for (const [k, v] of Object.entries(p)) {
     await q(
       "insert into settings (key, value) values ($1, $2) on conflict (key) do update set value = excluded.value",
@@ -778,6 +768,32 @@ export async function listRecentPayments(limit = 8): Promise<Payment[]> {
   return (await q("select * from payments order by id desc limit $1", [limit])).map(toPayment);
 }
 
+/**
+ * Với phòng có VA riêng: chọn hóa đơn cũ nhất còn khoản chờ thu và đợt thu phù hợp với số tiền.
+ * Đúng số còn thiếu của tiền trọ, của chi phí khác hoặc của cả hai thì tính đúng đợt đó;
+ * không khớp số nào thì chia theo thứ tự chi phí khác rồi đến tiền trọ (như chuyển gộp).
+ */
+async function pickVaTarget(roomId: number, amount: number): Promise<{ inv: Invoice; part: PayTarget } | null> {
+  const all = (await q("select * from invoices where room_id = $1 order by period asc", [roomId])).map(toInvoice);
+  for (const inv of all) {
+    const res = invoiceResult(inv);
+    const rentOpen = inv.rent_published && res.rent > 0 && !inv.rent_paid_at;
+    const otherOpen = inv.published && res.complete && !inv.paid_at;
+    if (!rentOpen && !otherOpen) continue;
+    const rentLeft = rentOpen ? Math.max(res.rent - (await receivedFor(inv.id, "rent")), 0) : 0;
+    const otherLeft = otherOpen ? Math.max(res.othersTotal - (await receivedFor(inv.id, "other")), 0) : 0;
+    let part: PayTarget;
+    if (rentOpen && otherOpen) {
+      part =
+        amount === rentLeft ? "rent" : amount === otherLeft ? "other" : "all";
+    } else {
+      part = rentOpen ? "rent" : "other";
+    }
+    return { inv, part };
+  }
+  return null;
+}
+
 export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
 
 /**
@@ -787,29 +803,27 @@ export type PaymentResult = "duplicate" | "unmatched" | "recorded" | "paid";
  * - Không khớp: vẫn lưu để chủ trọ thấy trong danh sách "chưa khớp".
  */
 export async function recordSepayPayment(tx: SepayPayload): Promise<PaymentResult> {
-  const settings = await getSettings();
-  // Webhook đã xác thực bằng API Key nên không cần so số tài khoản (giao dịch giả lập của SePay dùng tài khoản ảo khác).
-  // Ưu tiên nội dung mới "<TIỀN TỐ>_<PHÒNG>[_TIENTRO]_<MM>/<YYYY>" (có TIENTRO là đợt tiền trọ);
-  // không thấy thì dùng mã hóa đơn kiểu cũ "<TIỀN TỐ><số>" (tính vào chi phí khác).
+  // Mỗi phòng một VA (biến môi trường VA_<TÊN PHÒNG>): tiền vào đúng VA nào thì tính cho phòng đó,
+  // không phụ thuộc nội dung chuyển khoản (người thuê sửa nội dung cũng không ảnh hưởng).
   const rooms = await listRooms();
-  const ref =
-    parsePaymentTarget(settings.sepay_prefix, tx.content, rooms) ??
-    parsePaymentTarget(settings.sepay_prefix, tx.code ?? "", rooms);
-  const part: PayTarget = ref?.part ?? "other";
-  let inv: Invoice | null = ref ? await getInvoice(ref.roomId, ref.period) : null;
-  let invoiceId: number | null = inv ? inv.id : null;
-  if (!inv && !ref) {
-    invoiceId = parsePaymentCode(settings.sepay_prefix, tx.code, tx.content);
-    inv = invoiceId ? await getInvoiceById(invoiceId) : null;
+  const accounts = [normalizeAccount(tx.subAccount), normalizeAccount(tx.accountNumber)].filter(Boolean);
+  const vaRoom = rooms.find((r) => {
+    const va = roomVa(r.name);
+    return va !== "" && accounts.includes(va);
+  });
+
+  let part: PayTarget = "other";
+  let inv: Invoice | null = null;
+  let note = "";
+  if (vaRoom) {
+    const t = await pickVaTarget(vaRoom.id, tx.transferAmount);
+    inv = t?.inv ?? null;
+    part = t?.part ?? "other";
+    if (!inv) note = `Tiền vào tài khoản riêng của ${vaRoom.name} nhưng không có khoản nào đang chờ thu`;
+  } else {
+    note = "Không khớp tài khoản VA của phòng nào";
   }
   const partName = part === "rent" ? "tiền trọ" : part === "all" ? "gộp tiền trọ và chi phí khác" : "chi phí khác";
-
-  let note = "";
-  if (!inv) {
-    if (ref) note = `Không có hóa đơn của ${rooms.find((r) => r.id === ref.roomId)?.name ?? "phòng"} kỳ ${ref.period}`;
-    else if (invoiceId) note = `Không có hóa đơn mã ${invoiceId}`;
-    else note = `Không thấy mã thanh toán (${settings.sepay_prefix}_TÊNPHÒNG_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TIENTRO_MM/YYYY hoặc ${settings.sepay_prefix}_TÊNPHÒNG_TONG_MM/YYYY) trong nội dung`;
-  }
 
   const rows = await q(
     `insert into payments (sepay_id, invoice_id, amount, content, code, account, gateway, tx_date, note, part)

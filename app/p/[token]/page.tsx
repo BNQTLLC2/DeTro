@@ -28,7 +28,7 @@ import {
   receivedFor,
   type Invoice,
 } from "@/lib/queries";
-import { paymentContent, sepayQrUrl, type PayTarget } from "@/lib/sepay";
+import { roomVa, sepayQrUrl, type PayTarget } from "@/lib/sepay";
 
 export const dynamic = "force-dynamic";
 
@@ -119,7 +119,8 @@ export default async function TenantPage({
   const chartData = last6.map((i) => ({ i, r: invoiceResult(i) }));
 
   // Thanh toán: mỗi đợt một QR SePay, số tiền = còn thiếu, nội dung có mã riêng từng đợt để tự khớp
-  const bankReady = settings.bank_code !== "" && settings.bank_account !== "";
+  const va = roomVa(room.name); // VA riêng của phòng (biến môi trường); chưa có thì không hiện QR
+  const bankReady = settings.bank_code !== "" && va !== "";
   const autoConfirm = !!process.env.SEPAY_API_KEY;
   // Hai đợt thu cùng chưa đóng (tiền trọ đã công bố mà điện, nước, phí khác vẫn chưa đóng): gộp thành 1 QR duy nhất.
   const merged = rentShown && otherShown && !rentPaid && !otherPaid;
@@ -130,16 +131,14 @@ export default async function TenantPage({
         ? (await receivedFor(inv.id, "rent")) + (await receivedFor(inv.id, "other"))
         : await receivedFor(inv.id, part);
     const remaining = Math.max(total - received, 0);
-    const content = paymentContent(settings.sepay_prefix, room.name, inv.period, part);
     const qrReady = !paid && bankReady;
-    const opts = { account: settings.bank_account, bank: settings.bank_code, amount: remaining, content };
+    const opts = { account: va, bank: settings.bank_code, amount: remaining };
     return {
       part,
       invoiceId: inv.id,
       paid,
       received,
       remaining,
-      content,
       qrReady,
       qrUrl: qrReady ? sepayQrUrl(opts) : "",
       qrDownloadUrl: qrReady ? sepayQrUrl({ ...opts, download: true }) : "",
@@ -414,7 +413,7 @@ export default async function TenantPage({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={p.qrUrl}
-              alt={`Mã QR chuyển khoản ${moneyD(p.remaining)} nội dung ${p.content}`}
+              alt={`Mã QR chuyển khoản ${moneyD(p.remaining)} tới tài khoản ${va}`}
               width={260}
               height={260}
               className="rounded-xl bg-white"
@@ -426,7 +425,7 @@ export default async function TenantPage({
               <dt className="text-muted">Ngân hàng</dt>
               <dd className="text-right font-semibold">{settings.bank_code}</dd>
               <dt className="text-muted">Số tài khoản</dt>
-              <dd className="text-right font-semibold">{settings.bank_account}</dd>
+              <dd className="text-right font-semibold">{va}</dd>
               {settings.bank_holder ? (
                 <>
                   <dt className="text-muted">Chủ tài khoản</dt>
@@ -435,13 +434,13 @@ export default async function TenantPage({
               ) : null}
               <dt className="text-muted">Số tiền</dt>
               <dd className="text-right font-semibold">{moneyD(p.remaining)}</dd>
-              <dt className="text-muted">Nội dung</dt>
-              <dd className="text-right font-semibold">{p.content}</dd>
             </dl>
-            <CopyTextButton text={p.content} label="Sao chép nội dung chuyển khoản" />
+            <p className="w-full rounded-xl bg-accent-soft p-3 text-sm text-accent">
+              Đây là tài khoản riêng của phòng. Chỉ cần chuyển đúng số tiền, không cần nhập nội dung.
+            </p>
+            <CopyTextButton text={va} label="Sao chép số tài khoản" />
             <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
             <p className="text-center text-xs leading-5 text-muted">
-              Hãy giữ nguyên nội dung chuyển khoản {p.part === "all" ? "" : "(mỗi khoản có nội dung riêng, đừng chuyển gộp)."}{" "}
               {autoConfirm
                 ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
                 : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
