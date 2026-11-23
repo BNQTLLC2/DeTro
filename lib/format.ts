@@ -99,11 +99,39 @@ export function rentDueISO(period: string, moveInDate: string, billingDay: numbe
   return clampDay(y, m, rentDay(moveInDate, billingDay)).toISOString().slice(0, 10);
 }
 
-/** Kỳ thuê của tiền trọ: từ ngày vào ở tháng trước đến hết ngày liền trước ngày vào ở tháng này. */
-export function rentRange(period: string, moveInDate: string, billingDay: number): string {
+/**
+ * Kỳ `period` có phải kỳ thu tiền trọ của phòng không. Phòng thu mỗi tháng (cycle = 1) thì kỳ nào cũng thu.
+ * Phòng thu 3 tháng một lần thì chỉ thu ở các kỳ cách tháng vào ở đúng bội số của 3 (vào ở 29/10 thì thu
+ * ngày 29/1, 29/4, ...), mỗi lần trả cho 3 tháng liền trước. Chưa có ngày vào ở thì tính từ tháng 1/2000.
+ */
+export function isRentPeriod(period: string, moveInDate: string, cycle: number): boolean {
+  if (cycle <= 1) return true;
+  const anchor = /^\d{4}-\d{2}/.test(moveInDate ?? "") ? moveInDate.slice(0, 7) : "2000-01";
+  const [ay, am] = anchor.split("-").map(Number);
+  const [y, m] = period.split("-").map(Number);
+  const diff = (y - ay) * 12 + (m - am);
+  return diff > 0 && diff % cycle === 0;
+}
+
+/** Số tiền trọ của phòng ở kỳ `period`: giá thuê × số tháng của chu kỳ; kỳ không thu thì 0. */
+export function rentForPeriod(
+  room: { rent: number; rent_cycle: number; move_in_date: string },
+  period: string,
+): number {
+  const cycle = Math.max(room.rent_cycle || 1, 1);
+  return isRentPeriod(period, room.move_in_date, cycle) ? room.rent * cycle : 0;
+}
+
+/** Tên đợt thu tiền trọ: "Tiền trọ" hoặc "Tiền trọ 3 tháng". */
+export function rentLabel(cycle: number): string {
+  return cycle > 1 ? `Tiền trọ ${cycle} tháng` : "Tiền trọ";
+}
+
+/** Kỳ thuê của tiền trọ: từ ngày vào ở `cycle` tháng trước đến hết ngày liền trước ngày vào ở tháng này. */
+export function rentRange(period: string, moveInDate: string, billingDay: number, cycle = 1): string {
   const day = rentDay(moveInDate, billingDay);
   const [y, m] = period.split("-").map(Number);
-  const prev = shiftPeriod(period, -1).split("-").map(Number);
+  const prev = shiftPeriod(period, -Math.max(cycle, 1)).split("-").map(Number);
   const start = clampDay(prev[0], prev[1], day);
   const end = new Date(clampDay(y, m, day).getTime() - 86400000);
   return `${dm(start)} – ${dm(end)}`;

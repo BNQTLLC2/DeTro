@@ -173,6 +173,7 @@ export async function saveRoomAction(fd: FormData): Promise<ActionState> {
     await Q.saveRoom(id, {
       name,
       rent: Math.max(intOf(fd, "rent"), 0),
+      rent_cycle: intOf(fd, "rent_cycle", 1) === 3 ? 3 : 1,
       tenant_name: str(fd, "tenant_name"),
       tenant_phone: str(fd, "tenant_phone"),
       occupants: Math.max(intOf(fd, "occupants", 1), 0),

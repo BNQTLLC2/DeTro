@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeFees, computeInvoice, type BillingInput, type FeeType, type RoomFee } from "@/lib/billing";
-import { feeDueDate, normalizePhone, periodLabel, periodName, periodRange, periodShort, rentDay, rentDueDate, rentRange, shiftPeriod, transferNote } from "@/lib/format";
+import { feeDueDate, isRentPeriod, normalizePhone, periodLabel, periodName, periodRange, periodShort, rentDay, rentDueDate, rentForPeriod, rentLabel, rentRange, shiftPeriod, transferNote } from "@/lib/format";
 
 const base: BillingInput = {
   rent: 2800000,
@@ -137,5 +137,22 @@ describe("format", () => {
     expect(periodName("2026-11")).toBe("tháng 10/2026");
     expect(periodShort("2026-11")).toBe("T10");
     expect(periodLabel("2026-01")).toBe("12/2025");
+  });
+
+  it("phòng thu 3 tháng một lần chỉ thu ở các kỳ cách tháng vào ở đúng bội số của 3", () => {
+    const room = { rent: 3_000_000, rent_cycle: 3, move_in_date: "2026-10-29" };
+    expect(isRentPeriod("2026-11", room.move_in_date, 3)).toBe(false);
+    expect(isRentPeriod("2026-12", room.move_in_date, 3)).toBe(false);
+    expect(isRentPeriod("2027-01", room.move_in_date, 3)).toBe(true);
+    expect(isRentPeriod("2027-04", room.move_in_date, 3)).toBe(true);
+    expect(isRentPeriod("2026-10", room.move_in_date, 3)).toBe(false); // tháng vào ở chưa thu
+    expect(rentForPeriod(room, "2027-01")).toBe(9_000_000);
+    expect(rentForPeriod(room, "2026-12")).toBe(0);
+    // phòng thu mỗi tháng: như trước
+    expect(rentForPeriod({ rent: 3_000_000, rent_cycle: 1, move_in_date: "2026-10-29" }, "2026-12")).toBe(3_000_000);
+    expect(rentLabel(3)).toBe("Tiền trọ 3 tháng");
+    expect(rentLabel(1)).toBe("Tiền trọ");
+    // kỳ thuê 3 tháng: 29/10 – 28/1
+    expect(rentRange("2027-01", "2026-10-29", 1, 3)).toBe("29/10 – 28/01");
   });
 });

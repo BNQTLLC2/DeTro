@@ -10,6 +10,7 @@ import {
   isPeriod,
   moneyD,
   periodLabel,
+  rentForPeriod,
   shiftPeriod,
   shortDate,
 } from "@/lib/format";
@@ -95,7 +96,7 @@ export default async function EnterReadings({
   const res = inv
     ? invoiceResult(inv)
     : computeInvoice({
-        rent: selected.rent,
+        rent: rentForPeriod(selected, period),
         occupants: selected.occupants,
         elecStart: null,
         elecEnd: null,
@@ -361,7 +362,11 @@ export default async function EnterReadings({
           Tạm tính chi phí khác {selected.name}
         </h3>
         <p className="text-sm text-muted">
-          Tiền trọ ({moneyD(inv?.rent ?? selected.rent)}) thu riêng theo ngày vào ở, công bố ở trang Tổng quan.
+          {selected.rent_cycle > 1
+            ? (inv?.rent ?? rentForPeriod(selected, period)) > 0
+              ? `Tiền trọ ${selected.rent_cycle} tháng (${moneyD(inv?.rent ?? rentForPeriod(selected, period))}) thu riêng theo ngày vào ở, công bố ở trang Tổng quan.`
+              : `Phòng này thu tiền trọ ${selected.rent_cycle} tháng một lần, kỳ này không thu tiền trọ.`
+            : `Tiền trọ (${moneyD(inv?.rent ?? selected.rent)}) thu riêng theo ngày vào ở, công bố ở trang Tổng quan.`}
         </p>
         <Row
           label="Tiền điện"

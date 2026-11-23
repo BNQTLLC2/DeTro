@@ -10,7 +10,7 @@ import {
   type FeeType,
   type RoomFee,
 } from "./billing";
-import { currentPeriod, rentDueISO, shiftPeriod, todayVN } from "./format";
+import { currentPeriod, isRentPeriod, rentDueISO, rentForPeriod, shiftPeriod, todayVN } from "./format";
 import { normalizeAccount, roomVa, type PayTarget, type PaymentPart, type SepayPayload } from "./sepay";
 
 /* ------------------------------ Kiểu dữ liệu ------------------------------ */
@@ -32,6 +32,8 @@ export type Room = {
   name: string;
   sort: number;
   rent: number;
+  /** Số tháng mỗi lần thu tiền trọ: 1 hoặc 3. */
+  rent_cycle: number;
   tenant_name: string;
   tenant_phone: string;
   occupants: number;
@@ -88,6 +90,7 @@ function toRoom(r: Row): Room {
     name: r.name,
     sort: r.sort,
     rent: r.rent,
+    rent_cycle: r.rent_cycle === 3 ? 3 : 1,
     tenant_name: r.tenant_name,
     tenant_phone: r.tenant_phone,
     occupants: r.occupants,
@@ -217,7 +220,7 @@ export type RoomInput = Omit<Room, "id" | "sort" | "token">;
 export async function saveRoom(id: number, r: RoomInput): Promise<void> {
   await q(
     `update rooms set name=$2, rent=$3, tenant_name=$4, tenant_phone=$5, occupants=$6, deposit=$7,
-       move_in_date=$8, billing_day=$9, is_vacant=$10, init_elec=$11, init_water=$12 where id=$1`,
+       move_in_date=$8, billing_day=$9, is_vacant=$10, init_elec=$11, init_water=$12, rent_cycle=$13 where id=$1`,
     [
       id,
       r.name,
@@ -231,6 +234,7 @@ export async function saveRoom(id: number, r: RoomInput): Promise<void> {
       r.is_vacant,
       r.init_elec,
       r.init_water,
+      r.rent_cycle === 3 ? 3 : 1,
     ],
   );
 }
@@ -455,11 +459,12 @@ export async function readingDefaults(
   };
 }
 
-async function snapshotValues(room: Room) {
+async function snapshotValues(room: Room, period: string) {
   const s = await getSettings();
   const fees = await feesForRoom(room);
   return {
-    rent: room.rent,
+    // Phòng thu 3 tháng một lần: kỳ thu = giá × 3, các kỳ còn lại không có tiền trọ.
+    rent: rentForPeriod(room, period),
     occupants: room.occupants,
     elec_price: s.elec_price,
     water_quota: s.water_quota,
@@ -469,8 +474,8 @@ async function snapshotValues(room: Room) {
   };
 }
 
-async function refreshSnapshot(invoiceId: number, room: Room): Promise<void> {
-  const v = await snapshotValues(room);
+async function refreshSnapshot(invoiceId: number, room: Room, period: string): Promise<void> {
+  const v = await snapshotValues(room, period);
   await q(
     `update invoices set rent=$2, occupants=$3, elec_price=$4, water_quota=$5, water_low=$6, water_high=$7,
        fees=$8::jsonb where id=$1`,
@@ -481,7 +486,7 @@ async function refreshSnapshot(invoiceId: number, room: Room): Promise<void> {
 export async function ensureInvoice(room: Room, period: string): Promise<Invoice> {
   const existing = await getInvoice(room.id, period);
   if (existing) return existing;
-  const v = await snapshotValues(room);
+  const v = await snapshotValues(room, period);
   await q(
     `insert into invoices (room_id, period, rent, occupants, elec_price, water_quota, water_low, water_high, fees)
      values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) on conflict (room_id, period) do nothing`,
@@ -513,7 +518,7 @@ export async function saveReading(
     [inv.id, start, end, readAt],
   );
   // Chưa từng công bố thì cập nhật lại giá/phí/số người theo hiện tại. Đã từng công bố thì giữ nguyên giá đã chốt.
-  if (!inv.published_at) await refreshSnapshot(inv.id, room);
+  if (!inv.published_at) await refreshSnapshot(inv.id, room, period);
 }
 
 export async function addAdjustment(roomId: number, period: string, name: string, amount: number): Promise<void> {
@@ -536,7 +541,7 @@ export async function publishInvoice(roomId: number, period: string): Promise<vo
   const inv = await getInvoice(roomId, period);
   if (!room || !inv) throw new Error("Chưa có hóa đơn để công bố.");
   if (!invoiceResult(inv).complete) throw new Error("Cần nhập đủ và đúng số điện và số nước trước khi công bố.");
-  if (!inv.published_at) await refreshSnapshot(inv.id, room);
+  if (!inv.published_at) await refreshSnapshot(inv.id, room, period);
   await q("update invoices set published = true, published_at = coalesce(published_at, now()) where id = $1", [inv.id]);
   // Tiền có thể đã về trước khi công bố: nếu đủ thì đánh dấu đã thu luôn.
   const fresh = await getInvoiceById(inv.id);
@@ -552,16 +557,19 @@ export async function publishRent(roomId: number, period: string): Promise<void>
   const room = await getRoom(roomId);
   if (!room) throw new Error("Không tìm thấy phòng.");
   if (room.rent <= 0) throw new Error("Phòng này chưa có tiền trọ. Nhập tiền trọ ở trang phòng trước.");
+  if (!isRentPeriod(period, room.move_in_date, room.rent_cycle)) {
+    throw new Error(`Phòng này thu tiền trọ ${room.rent_cycle} tháng một lần, kỳ này không phải kỳ thu.`);
+  }
   const inv = await ensureInvoice(room, period);
   // Chưa công bố gì thì lấy tiền trọ hiện tại của phòng; đã công bố thì giữ mức đã chốt.
-  if (!inv.rent_published && (!inv.published_at || inv.rent <= 0)) await q("update invoices set rent=$2 where id=$1", [inv.id, room.rent]);
+  if (!inv.rent_published && (!inv.published_at || inv.rent <= 0)) await q("update invoices set rent=$2 where id=$1", [inv.id, rentForPeriod(room, period)]);
   await q("update invoices set rent_published = true, rent_auto_done = true where id = $1", [inv.id]);
   const fresh = await getInvoiceById(inv.id);
   if (fresh) await settleInvoice(fresh, "rent", todayVN());
 }
 
 /**
- * Tự công bố tiền trọ đúng ngày thu (ngày vào ở hằng tháng) cho kỳ này và kỳ trước (phòng nào chưa được công bố).
+ * Tự công bố tiền trọ đúng ngày thu (ngày vào ở; phòng thu 3 tháng một lần thì cứ 3 tháng) cho kỳ này và kỳ trước (phòng nào chưa được công bố).
  * Phòng trống, chưa có tiền trọ, hoặc tháng đầu mới vào ở (chưa đủ một kỳ thuê) thì bỏ qua.
  * Chủ trọ đã tự công bố hoặc hủy công bố thì không tự công bố lại. Trả về số phòng đã công bố.
  * Gọi khi mở trang (không cần tác vụ định kỳ) và từ /api/cron/rent mỗi sáng.
@@ -585,6 +593,8 @@ export async function autoPublishRent(roomId?: number): Promise<number> {
       if (skip.has(`${room.id}|${period}`)) continue;
       // Kỳ thuê đầu tiên kết thúc vào ngày vào ở của tháng sau, nên chưa thu trong tháng vào ở.
       if (room.move_in_date && room.move_in_date.slice(0, 7) >= period) continue;
+      // Phòng thu 3 tháng một lần chỉ thu ở các kỳ đúng chu kỳ.
+      if (!isRentPeriod(period, room.move_in_date, room.rent_cycle)) continue;
       if (rentDueISO(period, room.move_in_date, room.billing_day) > today) continue;
       await publishRent(room.id, period);
       n++;

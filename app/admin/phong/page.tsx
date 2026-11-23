@@ -60,6 +60,7 @@ export default async function RoomsPage() {
                             </span>
                             <span className="block text-[13px] text-muted">
                               {r.rent > 0 ? moneyD(r.rent) : "Chưa có giá"}
+                              {r.rent_cycle > 1 ? ` · thu ${r.rent_cycle} tháng` : ""}
                               {" · "}
                               {r.occupants} người
                             </span>

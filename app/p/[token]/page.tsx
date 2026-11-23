@@ -9,6 +9,7 @@ import {
   dmy,
   feeDueDate,
   rentDueDate,
+  rentLabel,
   moneyD,
   money,
   periodLabel,
@@ -121,9 +122,11 @@ export default async function TenantPage({
   const res = invoiceResult(inv);
   const prevRes = prev ? invoiceResult(prev) : null;
 
+  const rentTitle = rentLabel(room.rent_cycle); // "Tiền trọ" hoặc "Tiền trọ 3 tháng"
+
   // Các phần của tổng tiền, bỏ khoản bằng 0
   const parts = [
-    ...(rentShown ? [{ name: "Tiền trọ", amount: inv.rent, color: "var(--c-rent)" }] : []),
+    ...(rentShown ? [{ name: rentTitle, amount: inv.rent, color: "var(--c-rent)" }] : []),
     ...(otherShown
       ? [
           { name: "Tiền điện", amount: res.elecAmount, color: "var(--c-elec)" },
@@ -150,7 +153,11 @@ export default async function TenantPage({
   const monthTitle = `Tháng ${periodLabel(inv.period)}`;
 
   const last6 = publishedList.slice(-6);
-  const chartData = last6.map((i) => ({ i, r: invoiceResult(i) }));
+  const chartData = last6.map((i) => {
+    const r = invoiceResult(i);
+    // Tổng tiền của tháng: chỉ tính tiền trọ ở kỳ có thu (phòng thu 3 tháng một lần thì 2 tháng còn lại không có)
+    return { i, r, total: (i.rent_published ? i.rent : 0) + r.othersTotal };
+  });
 
   // Thanh toán: mỗi đợt một QR SePay, số tiền = còn thiếu, nội dung có mã riêng từng đợt để tự khớp
   const va = roomVa(room.name); // VA riêng của phòng (biến môi trường); chưa có thì không hiện QR
@@ -242,8 +249,8 @@ export default async function TenantPage({
           partial={rentPartial || otherPartial}
           lines={[
             {
-              label: "Tiền trọ",
-              short: "tiền trọ",
+              label: rentTitle,
+              short: rentTitle.toLowerCase(),
               items: [],
               amount: inv.rent,
               due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
@@ -263,7 +270,7 @@ export default async function TenantPage({
         <>
       {rentShown ? (
           <CollectCard
-            title="Tiền trọ"
+            title={rentTitle}
             month={monthTitle}
             amount={inv.rent}
             paid={rentPaid}
@@ -448,7 +455,7 @@ export default async function TenantPage({
       {/* Chuyển khoản: mỗi đợt thu một mã QR riêng */}
       {[
         { p: allPay, what: "Tất cả các khoản" },
-        { p: rentPay, what: "Tiền trọ" },
+        { p: rentPay, what: rentTitle },
         { p: otherPay, what: "Điện, nước & phí khác" },
       ].map(({ p, what }) =>
         p && p.qrReady ? (
@@ -464,7 +471,7 @@ export default async function TenantPage({
               </div>
               {p.part === "all" ? (
                 <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-sm">
-                  <dt className="text-muted">Tiền trọ</dt>
+                  <dt className="text-muted">{rentTitle}</dt>
                   <dd className="text-right font-semibold">{moneyD(inv.rent)}</dd>
                   <dt className="text-muted">Điện, nước & phí khác</dt>
                   <dd className="text-right font-semibold">{moneyD(res.othersTotal)}</dd>
@@ -523,9 +530,9 @@ export default async function TenantPage({
           <Chart
             title="Tổng tiền mỗi tháng"
             colorClass="bg-accent"
-            data={chartData.map(({ i, r }) => ({ key: i.period, label: periodShort(i.period), value: r.total, text: `${(r.total / 1_000_000).toFixed(2).replace(".", ",")}tr` }))}
+            data={chartData.map(({ i, total }) => ({ key: i.period, label: periodShort(i.period), value: total, text: `${(total / 1_000_000).toFixed(2).replace(".", ",")}tr` }))}
             selected={inv.period}
-            note={`Trung bình khoảng ${moneyD(Math.round(chartData.reduce((s, c) => s + c.r.total, 0) / chartData.length))} mỗi tháng.`}
+            note={`Trung bình khoảng ${moneyD(Math.round(chartData.reduce((s, c) => s + c.total, 0) / chartData.length))} mỗi tháng.`}
           />
           {chartData.some((c) => c.r.kwh > 0) ? (
             <Chart

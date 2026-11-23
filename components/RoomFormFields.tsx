@@ -6,6 +6,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 
 type RoomValues = {
   rent: string;
+  rent_cycle: string;
   tenant_name: string;
   tenant_phone: string;
   occupants: string;
@@ -31,6 +32,7 @@ export function RoomFormFields({
   rooms: RoomOption[];
 }) {
   const [vacant, setVacant] = useState(r.is_vacant);
+  const [cycle, setCycle] = useState(r.rent_cycle === "3" ? "3" : "1");
   const [open, setOpen] = useState(false);
   const floor = floorOf(roomName);
 
@@ -165,6 +167,37 @@ export function RoomFormFields({
         <Section title="Tiền phòng">
           <div className="col-span-2">
             <Field label="Giá thuê (đ/tháng)" name="rent" defaultValue={r.rent} money />
+          </div>
+          <div className="col-span-2 flex flex-col gap-2">
+            <span className="label !mb-0">Thu tiền trọ</span>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Thu tiền trọ">
+              {[
+                { v: "1", t: "1 tháng một lần" },
+                { v: "3", t: "3 tháng một lần" },
+              ].map((o) => (
+                <label
+                  key={o.v}
+                  className={`flex min-h-12 cursor-pointer items-center justify-center rounded-xl border-2 px-3 text-center text-base font-semibold ${
+                    cycle === o.v ? "border-accent bg-accent-soft text-accent" : "border-line bg-bg text-ink"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="rent_cycle"
+                    value={o.v}
+                    checked={cycle === o.v}
+                    onChange={() => setCycle(o.v)}
+                    className="sr-only"
+                  />
+                  {o.t}
+                </label>
+              ))}
+            </div>
+            <p className="text-sm text-muted">
+              {cycle === "3"
+                ? "Mỗi lần thu = giá thuê × 3 tháng, thu đúng ngày vào ở, cứ 3 tháng một lần. Cần nhập ngày vào ở."
+                : "Thu mỗi tháng đúng ngày vào ở."}
+            </p>
           </div>
         </Section>
 

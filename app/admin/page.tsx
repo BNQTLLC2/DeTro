@@ -7,6 +7,8 @@ import {
   currentPeriod,
   feeDueDate,
   rentDueDate,
+  rentForPeriod,
+  rentLabel,
   isPeriod,
   periodLabel,
   shiftPeriod,
@@ -62,12 +64,13 @@ function rentPart(room: Room, inv: Invoice | undefined, period: string): PartInf
   // Hóa đơn có thể được tạo từ lúc phòng chưa có giá (rent = 0): chỉ tin số đã chốt khi đã công bố
   // và lớn hơn 0, còn lại lấy giá hiện tại của phòng.
   const locked = inv?.rent_published && inv.rent > 0 ? inv.rent : 0;
-  const amount = locked || room.rent;
+  // Phòng thu 3 tháng một lần: kỳ không thu thì rentForPeriod = 0 và không hiện đợt tiền trọ.
+  const amount = locked || rentForPeriod(room, period);
   if (amount <= 0) return null;
   const status: Status = !inv?.rent_published ? "draft" : inv.rent_paid_at ? "paid" : "unpaid";
   return {
     key: "rent",
-    label: "Tiền trọ",
+    label: rentLabel(room.rent_cycle),
     status,
     amount,
     due: rentDueDate(period, room.move_in_date, room.billing_day),
@@ -518,7 +521,7 @@ function RoomTile({
               {room.tenant_name || "Chưa có tên"}
             </p>
             <p className="text-[13px] text-muted">
-              {room.rent > 0 ? `${moneyD(room.rent)} · ` : ""}
+              {room.rent > 0 ? `${moneyD(room.rent)}${room.rent_cycle > 1 ? `/tháng, thu ${room.rent_cycle} tháng` : ""} · ` : ""}
               {room.occupants} người
             </p>
           </div>
@@ -543,7 +546,7 @@ function RoomTile({
                 >
                   {d.icon}
                 </span>
-                <span>{p.key === "rent" ? "Tiền trọ" : "Điện, nước"}</span>
+                <span>{p.key === "rent" ? p.label : "Điện, nước"}</span>
                 <span className="ml-auto whitespace-nowrap font-semibold tabular-nums text-ink">
                   {p.status === "pending" ? "Chưa nhập số" : p.status === "paid" ? "Đã thu" : moneyD(p.amount ?? 0)}
                 </span>

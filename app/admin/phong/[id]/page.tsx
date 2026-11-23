@@ -35,6 +35,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
           rooms={all.map((x) => ({ id: x.id, name: x.name, is_vacant: x.is_vacant }))}
           r={{
             rent: String(r.rent),
+            rent_cycle: String(r.rent_cycle),
             tenant_name: r.tenant_name,
             tenant_phone: r.tenant_phone,
             occupants: String(r.occupants),

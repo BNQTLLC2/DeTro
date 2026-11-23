@@ -27,7 +27,7 @@ describe("luồng chủ trọ -> người thuê", () => {
     const [room] = await Qm.listRooms();
     await Qm.saveRoom(room.id, {
       name: "Phòng 3", rent: 2800000, tenant_name: "Thu Hà", tenant_phone: "0912345678",
-      occupants: 3, deposit: 0, move_in_date: "", billing_day: 20, is_vacant: false, init_elec: 1512, init_water: 308,
+      occupants: 3, deposit: 0, move_in_date: "", billing_day: 20, is_vacant: false, init_elec: 1512, init_water: 308, rent_cycle: 1,
     });
     await Qm.saveRoomFees(room.id, [{ fee_type_id: (await Qm.listFeeTypes())[0].id, enabled: true, amount: 45000, quantity: 1 }]);
 
@@ -178,6 +178,26 @@ describe("luồng chủ trọ -> người thuê", () => {
       expect((await Qm.getInvoice(old.id, "2026-12"))!.rent_published).toBe(false);
       // Có thể chỉ chạy cho một phòng (trang người thuê)
       expect(await Qm.autoPublishRent(old.id)).toBe(0);
+    });
+
+    it("phòng thu 3 tháng một lần chỉ công bố tiền trọ (giá × 3) ở kỳ đúng chu kỳ", async () => {
+      const quarterly = (await Qm.listRooms())[8];
+      await Qm.saveRoom(quarterly.id, { ...quarterly, rent: 1000000, rent_cycle: 3, move_in_date: "2026-03-15", billing_day: 20, is_vacant: false });
+
+      // Vào ở 03/2026: các kỳ thu là 06, 09, 12/2026. Kỳ 11/2026 không phải kỳ thu.
+      at("2026-12-20");
+      await Qm.autoPublishRent(quarterly.id);
+      expect(await Qm.getInvoice(quarterly.id, "2026-11")).toBeNull();
+      const dec = (await Qm.getInvoice(quarterly.id, "2026-12"))!;
+      expect(dec.rent_published).toBe(true);
+      expect(dec.rent).toBe(3000000);
+
+      // Chủ trọ không công bố tay được ở kỳ không thu
+      await expect(Qm.publishRent(quarterly.id, "2026-11")).rejects.toThrow(/3 tháng/);
+
+      // Kỳ không thu vẫn có hóa đơn điện nước nhưng không có tiền trọ
+      const off = await Qm.ensureInvoice((await Qm.getRoom(quarterly.id))!, "2027-01");
+      expect(off.rent).toBe(0);
     });
   });
 
