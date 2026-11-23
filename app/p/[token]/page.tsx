@@ -445,79 +445,70 @@ export default async function TenantPage({
         </section>
       ) : null}
 
-      {/* Chuyển khoản: mỗi đợt thu một mã QR và nội dung riêng */}
+      {/* Chuyển khoản: mỗi đợt thu một mã QR riêng */}
       {[
-        {
-          p: allPay,
-          title: "Chuyển khoản một lần",
-          what: "tất cả các khoản",
-          edge: "!border-l-accent",
-          chip: "bg-accent text-accent-ink",
-        },
-        { p: rentPay, title: "Chuyển khoản tiền trọ", what: "tiền trọ", edge: "!border-l-c-rent", chip: "bg-c-rent text-white" },
-        { p: otherPay, title: "Chuyển khoản điện, nước và các phí khác", what: "điện, nước và các phí khác", edge: "!border-l-c-elec", chip: "bg-c-elec text-white" },
-      ].map(({ p, title, what, edge, chip }) =>
+        { p: allPay, what: "Tất cả các khoản" },
+        { p: rentPay, what: "Tiền trọ" },
+        { p: otherPay, what: "Điện, nước & phí khác" },
+      ].map(({ p, what }) =>
         p && p.qrReady ? (
-          <section key={p.part} className={`card flex flex-col items-center gap-3 border-l-8 ${edge}`}>
-            <h2 className="self-start text-lg font-bold">{title}</h2>
-            {p.part === "all" ? (
-              <>
-                <div className={`w-full rounded-xl px-3 py-3 text-center ${chip}`}>
-                  <p className="text-sm font-medium">Số tiền cần chuyển</p>
-                  <p className="text-3xl font-bold leading-tight">{moneyD(p.remaining)}</p>
-                </div>
-                <dl className="grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 text-sm">
+          <section key={p.part} className="card flex flex-col overflow-hidden !p-0">
+            <div className="flex items-center justify-between gap-3 bg-accent-soft px-4 py-3">
+              <h2 className="shrink-0 whitespace-nowrap text-lg font-bold">Chuyển khoản</h2>
+              <span className="min-w-0 text-right text-sm font-semibold text-accent">{what}</span>
+            </div>
+            <div className="flex flex-col gap-3 p-4">
+              <div className="text-center">
+                <p className="text-sm text-muted">Số tiền cần chuyển</p>
+                <p className="text-4xl font-bold leading-tight">{moneyD(p.remaining)}</p>
+              </div>
+              {p.part === "all" ? (
+                <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-sm">
                   <dt className="text-muted">Tiền trọ</dt>
                   <dd className="text-right font-semibold">{moneyD(inv.rent)}</dd>
-                  <dt className="text-muted">Điện, nước, phí khác</dt>
+                  <dt className="text-muted">Điện, nước & phí khác</dt>
                   <dd className="text-right font-semibold">{moneyD(res.othersTotal)}</dd>
                 </dl>
-              </>
-            ) : (
-              <p className={`w-full rounded-xl px-3 py-2 text-center text-base font-bold ${chip}`}>
-                Mã QR này để trả {what}: {moneyD(p.remaining)}
-              </p>
-            )}
-            {p.received > 0 ? (
-              <p className="w-full rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
-                Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
-              </p>
-            ) : null}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={p.qrUrl}
-              alt={`Mã QR chuyển khoản ${moneyD(p.remaining)} tới tài khoản ${va}`}
-              width={260}
-              height={260}
-              className="rounded-xl bg-white"
-            />
-            <a href={p.qrDownloadUrl} download className="btn-ghost w-full">
-              Tải mã QR về máy
-            </a>
-            <dl className="grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted">Ngân hàng</dt>
-              <dd className="text-right font-semibold">{settings.bank_code}</dd>
-              <dt className="text-muted">Số tài khoản</dt>
-              <dd className="text-right font-semibold">{va}</dd>
-              {settings.bank_holder ? (
-                <>
-                  <dt className="text-muted">Chủ tài khoản</dt>
-                  <dd className="text-right font-semibold">{settings.bank_holder}</dd>
-                </>
               ) : null}
-              <dt className="text-muted">Số tiền</dt>
-              <dd className="text-right font-semibold">{moneyD(p.remaining)}</dd>
-            </dl>
-            <p className="w-full rounded-xl bg-accent-soft p-3 text-sm text-accent">
-              Đây là tài khoản riêng của phòng. Chỉ cần chuyển đúng số tiền, không cần nhập nội dung.
-            </p>
-            <CopyTextButton text={va} label="Sao chép số tài khoản" />
-            <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
-            <p className="text-center text-xs leading-5 text-muted">
-              {autoConfirm
-                ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
-                : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
-            </p>
+              {p.received > 0 ? (
+                <p className="rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
+                  Đã nhận {moneyD(p.received)}. Còn thiếu {moneyD(p.remaining)}.
+                </p>
+              ) : null}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.qrUrl}
+                alt={`Mã QR chuyển khoản ${moneyD(p.remaining)} tới tài khoản ${va}`}
+                width={260}
+                height={260}
+                className="mx-auto rounded-xl bg-white"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <a href={p.qrDownloadUrl} download className="btn-ghost !px-2">
+                  Tải mã QR
+                </a>
+                <CopyTextButton text={va} label="Sao chép STK" className="btn-ghost !px-2" />
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dt className="text-muted">Ngân hàng</dt>
+                <dd className="text-right font-semibold">{settings.bank_code}</dd>
+                <dt className="text-muted">Số tài khoản</dt>
+                <dd className="break-all text-right font-semibold">{va}</dd>
+                {settings.bank_holder ? (
+                  <>
+                    <dt className="text-muted">Chủ tài khoản</dt>
+                    <dd className="text-right font-semibold">{settings.bank_holder}</dd>
+                  </>
+                ) : null}
+              </dl>
+              <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
+              <p className="text-center text-xs leading-5 text-muted">
+                Tài khoản riêng của phòng, chỉ cần chuyển đúng số tiền, không cần nhập nội dung.{" "}
+                {autoConfirm
+                  ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
+                  : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
+              </p>
+            </div>
           </section>
         ) : null,
       )}

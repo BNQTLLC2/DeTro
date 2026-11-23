@@ -24,7 +24,7 @@ export function CopyLinkButton({ path, label = "Sao chép link" }: { path: strin
   );
 }
 
-export function CopyTextButton({ text, label }: { text: string; label: string }) {
+export function CopyTextButton({ text, label, className = "btn-primary w-full" }: { text: string; label: string; className?: string }) {
   const [done, setDone] = useState(false);
 
   async function copy() {
@@ -38,7 +38,7 @@ export function CopyTextButton({ text, label }: { text: string; label: string })
   }
 
   return (
-    <button type="button" onClick={copy} className="btn-primary w-full">
+    <button type="button" onClick={copy} className={className}>
       {done ? "Đã sao chép" : label}
     </button>
   );
