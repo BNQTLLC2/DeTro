@@ -193,29 +193,55 @@ export default async function TenantPage({
       </section>
 
       {/* Hai đợt thu */}
-      {rentShown ? (
-        <CollectCard
-          title={`Tiền trọ ${periodName(inv.period)}`}
-          amount={inv.rent}
+      {rentShown && otherShown && rentPaid === otherPaid ? (
+        // Hai đợt cùng đã đóng hoặc cùng chưa đóng (cùng một lần chuyển khoản): gộp thành một thẻ
+        <MergedCollectCard
+          title={`Tiền trọ, điện, nước và các phí khác ${periodName(inv.period)}`}
           paid={rentPaid}
-          paidAt={inv.rent_paid_at}
-          range={`Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`}
-          due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
-        />
-      ) : null}
-      {otherShown ? (
-        <CollectCard
-          title={`Điện, nước và các phí khác (nếu có) ${periodName(inv.period)}`}
-          amount={res.othersTotal}
-          paid={otherPaid}
-          paidAt={inv.paid_at}
-          range={`Kỳ tính: ${periodRange(inv.period, room.billing_day)}`}
-          due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
+          lines={[
+            {
+              label: "Tiền trọ",
+              amount: inv.rent,
+              range: `Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`,
+              due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
+              paidAt: inv.rent_paid_at,
+            },
+            {
+              label: "Điện, nước và các phí khác",
+              amount: res.othersTotal,
+              range: `Kỳ tính: ${periodRange(inv.period, room.billing_day)}`,
+              due: feeDueDate(inv.period, room.billing_day, settings.fee_day),
+              paidAt: inv.paid_at,
+            },
+          ]}
         />
       ) : (
-        <section className="card text-sm text-muted">
-          Điện, nước và các phí khác của {periodName(inv.period)} chưa được công bố. Khi chủ trọ chốt số và công bố, bạn sẽ thấy ở đây.
-        </section>
+        <>
+      {rentShown ? (
+          <CollectCard
+            title={`Tiền trọ ${periodName(inv.period)}`}
+            amount={inv.rent}
+            paid={rentPaid}
+            paidAt={inv.rent_paid_at}
+            range={`Kỳ thuê: ${rentRange(inv.period, room.move_in_date, room.billing_day)}`}
+            due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
+          />
+        ) : null}
+        {otherShown ? (
+          <CollectCard
+            title={`Điện, nước và các phí khác (nếu có) ${periodName(inv.period)}`}
+            amount={res.othersTotal}
+            paid={otherPaid}
+            paidAt={inv.paid_at}
+            range={`Kỳ tính: ${periodRange(inv.period, room.billing_day)}`}
+            due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
+          />
+        ) : (
+          <section className="card text-sm text-muted">
+            Điện, nước và các phí khác của {periodName(inv.period)} chưa được công bố. Khi chủ trọ chốt số và công bố, bạn sẽ thấy ở đây.
+          </section>
+        )}
+        </>
       )}
 
       {/* Tiền đi vào đâu */}
@@ -547,6 +573,58 @@ function CollectCard({
       ) : (
         <p className="text-sm font-semibold text-bad">Hạn đóng tiền: {due}</p>
       )}
+    </section>
+  );
+}
+
+function MergedCollectCard({
+  title,
+  paid,
+  lines,
+}: {
+  title: string;
+  paid: boolean;
+  lines: { label: string; amount: number; range: string; due: string; paidAt: string | null }[];
+}) {
+  const total = lines.reduce((t, l) => t + l.amount, 0);
+  const dues = [...new Set(lines.map((l) => l.due))];
+  const paidDates = [...new Set(lines.map((l) => l.paidAt).filter((d): d is string => !!d))];
+  return (
+    <section className="card flex flex-col gap-1">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-muted">{title}</p>
+        <span className={`chip shrink-0 ${paid ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"}`}>
+          {paid ? "Đã đóng tiền" : "Chưa thanh toán"}
+        </span>
+      </div>
+      <p className="text-4xl font-bold leading-tight">{moneyD(total)}</p>
+      <ul className="mt-1 flex flex-col divide-y divide-line text-sm">
+        {lines.map((l) => (
+          <li key={l.label} className="flex items-start justify-between gap-3 py-2">
+            <span className="min-w-0">
+              <span className="block font-medium">{l.label}</span>
+              <span className="block text-muted">{l.range}</span>
+            </span>
+            <span className="shrink-0 font-semibold">{moneyD(l.amount)}</span>
+          </li>
+        ))}
+      </ul>
+      {paid && paidDates.length > 0 ? (
+        <p className="text-sm font-semibold text-ok">
+          {paidDates.length === 1
+            ? `Đã nhận tiền ngày ${dmy(new Date(paidDates[0] + "T00:00:00Z"))}`
+            : `Đã nhận tiền: ${lines
+                .filter((l) => l.paidAt)
+                .map((l) => `${l.label.startsWith("Tiền trọ") ? "tiền trọ" : "điện, nước"} ngày ${dmy(new Date(l.paidAt! + "T00:00:00Z"))}`)
+                .join(", ")}`}
+        </p>
+      ) : !paid ? (
+        <p className="text-sm font-semibold text-bad">
+          {dues.length === 1
+            ? `Hạn đóng tiền: ${dues[0]}`
+            : `Hạn đóng tiền: ${lines.map((l) => `${l.label.startsWith("Tiền trọ") ? "tiền trọ" : "điện, nước"} ${l.due}`).join(", ")}`}
+        </p>
+      ) : null}
     </section>
   );
 }
