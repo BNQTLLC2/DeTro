@@ -516,13 +516,11 @@ export default async function TenantPage({
                   </>
                 ) : null}
               </dl>
-              <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
-              <p className="text-center text-xs leading-5 text-muted">
-                Tài khoản riêng của phòng, chỉ cần chuyển đúng số tiền, không cần nhập nội dung.{" "}
-                {autoConfirm
-                  ? "Hệ thống tự ghi nhận khi tiền về (thường trong vài phút), trang này sẽ tự cập nhật."
-                  : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
+              <p className="text-center text-sm leading-6 text-muted">
+                Chuyển đúng số tiền, không cần nhập nội dung.{" "}
+                {autoConfirm ? "Hệ thống tự cập nhật khi tiền về." : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
               </p>
+              <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
             </div>
           </section>
         ) : null,

@@ -29,7 +29,8 @@ export function PaymentWatcher({
   const router = useRouter();
   const [toast, setToast] = useState("");
   const [checking, setChecking] = useState(false);
-  const [msg, setMsg] = useState("");
+  // Thông báo sau khi bấm nút: "warn" là lỗi cần thử lại, "info" là chưa có tiền về
+  const [msg, setMsg] = useState<{ text: string; tone: "warn" | "info" } | null>(null);
   const checkRef = useRef<(manual: boolean) => Promise<void>>(async () => {});
   const last = useRef({ paid, received });
 
@@ -47,12 +48,12 @@ export function PaymentWatcher({
       busy = true;
       if (manual) {
         setChecking(true);
-        setMsg("");
+        setMsg(null);
       }
       try {
         const r = await fetch(`/api/p/${token}/status?inv=${invoiceId}&part=${part}`, { cache: "no-store" });
         if (!r.ok || stop) {
-          if (manual) setMsg("Không kiểm tra được lúc này. Hãy thử lại sau.");
+          if (manual) setMsg({ text: "Chưa kiểm tra được. Bấm lại sau ít phút.", tone: "warn" });
           return;
         }
         const s: { paid: boolean; received: number } = await r.json();
@@ -61,10 +62,10 @@ export function PaymentWatcher({
           last.current = s;
           router.refresh();
         } else if (manual) {
-          setMsg("Chưa nhận được thanh toán mới. Nếu bạn vừa chuyển khoản, hãy đợi một lát rồi bấm lại.");
+          setMsg({ text: "Chưa thấy tiền về. Nếu vừa chuyển, đợi một lát rồi bấm lại.", tone: "info" });
         }
       } catch {
-        if (manual) setMsg("Không kết nối được. Hãy kiểm tra mạng rồi thử lại.");
+        if (manual) setMsg({ text: "Chưa kết nối được. Kiểm tra mạng rồi bấm lại.", tone: "warn" });
       } finally {
         busy = false;
         if (manual) setChecking(false);
@@ -98,8 +99,13 @@ export function PaymentWatcher({
             {checking ? "Đang kiểm tra..." : "Kiểm tra thanh toán"}
           </button>
           {msg ? (
-            <p role="status" className="text-center text-xs text-muted">
-              {msg}
+            <p
+              role="status"
+              className={`rounded-xl px-3 py-2.5 text-center text-sm font-medium ${
+                msg.tone === "warn" ? "bg-warn-bg text-warn" : "bg-idle-bg text-ink"
+              }`}
+            >
+              {msg.text}
             </p>
           ) : null}
         </div>
