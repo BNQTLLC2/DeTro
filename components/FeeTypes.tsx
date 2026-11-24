@@ -25,9 +25,11 @@ export function FeeTypes({
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold [&::-webkit-details-marker]:hidden">
         <span
           aria-hidden
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xl leading-none text-accent transition-transform group-open:rotate-45"
+          className="relative size-8 shrink-0 rounded-full bg-accent-soft text-accent transition-transform group-open:rotate-45"
         >
-          +
+          {/* Vẽ dấu + bằng hai thanh để luôn nằm chính giữa vòng tròn (ký tự "+" bị lệch theo font) */}
+          <span className="absolute left-1/2 top-1/2 h-0.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+          <span className="absolute left-1/2 top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
         </span>
         Thêm khoản phí hoặc giảm giá
       </summary>

@@ -412,6 +412,11 @@ export async function getInvoice(roomId: number, period: string): Promise<Invoic
   return rows[0] ? toInvoice(rows[0]) : null;
 }
 
+/** Mọi hóa đơn của một phòng (kể cả chưa công bố), tháng cũ đến mới. Chỉ dùng cho chế độ xem trước của chủ trọ. */
+export async function listRoomInvoices(roomId: number): Promise<Invoice[]> {
+  return (await q("select * from invoices where room_id = $1 order by period asc", [roomId])).map(toInvoice);
+}
+
 /** Các hóa đơn đã công bố của một phòng, tháng cũ đến mới. */
 export async function listPublishedInvoices(roomId: number): Promise<Invoice[]> {
   return (

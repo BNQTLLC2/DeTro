@@ -399,6 +399,14 @@ export default async function EnterReadings({
         </p>
 
         <div className="grid grid-cols-2 gap-2">
+          <a
+            href={`/p/${selected.token}?m=${period}&preview=1`}
+            target="_blank"
+            rel="noopener"
+            className="btn-ghost col-span-2"
+          >
+            Xem trước người thuê sẽ thấy
+          </a>
           {published ? (
             <>
               <ActionForm action={unpublishRoomAction} className="col-span-2">

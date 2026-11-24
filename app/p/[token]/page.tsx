@@ -5,10 +5,12 @@ import { PaymentWatcher } from "@/components/AutoRefresh";
 import { CopyTextButton } from "@/components/CopyButton";
 import { FontSizeToggle } from "@/components/FontSizeToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { isAdmin } from "@/lib/auth";
 import {
   dmy,
   rentLabel,
   rentRangeFull,
+  rentForPeriod,
   moneyD,
   money,
   periodLabel,
@@ -22,6 +24,7 @@ import {
   getSettings,
   invoiceResult,
   autoPublishRent,
+  listRoomInvoices,
   listVisibleInvoices,
   receivedFor,
   receivedForInvoices,
@@ -62,8 +65,41 @@ export default async function TenantPage({
   const room = await getRoomByToken(token);
   if (!room) notFound();
 
-  await autoPublishRent(room.id); // đến ngày thu thì tự công bố tiền trọ
-  const [settings, invoices] = await Promise.all([getSettings(), listVisibleInvoices(room.id)]);
+  const sp = await searchParams;
+  // Chế độ xem trước (?preview=1): chỉ chủ trọ đã đăng nhập dùng được. Hiện cả phần chưa công bố như người thuê sẽ thấy
+  // sau khi công bố, và không tự công bố tiền trọ để việc xem trước không làm thay đổi dữ liệu.
+  const preview = first(sp.preview) === "1" && (await isAdmin());
+  if (!preview) await autoPublishRent(room.id); // đến ngày thu thì tự công bố tiền trọ
+  const [settings, rawInvoices] = await Promise.all([
+    getSettings(),
+    preview ? listRoomInvoices(room.id) : listVisibleInvoices(room.id),
+  ]);
+  const rawById = new Map(rawInvoices.map((i) => [i.id, i]));
+  const asTenantSees = (i: Invoice): Invoice | null => {
+    const published = i.published || invoiceResult(i).complete;
+    const rentLocked = i.rent_published && i.rent > 0;
+    const rent = rentLocked ? i.rent : rentForPeriod(room, i.period);
+    const rent_published = rentLocked || rent > 0;
+    if (!published && !rent_published) return null;
+    return { ...i, published, rent: rent_published ? rent : i.rent, rent_published };
+  };
+  const invoices = preview ? rawInvoices.map(asTenantSees).filter((i): i is Invoice => i !== null) : rawInvoices;
+  const monthHref = (period: string) => `/p/${token}?m=${period}${preview ? "&preview=1" : ""}`;
+  const previewBanner = (inv?: Invoice) => {
+    if (!preview) return null;
+    const raw = inv ? rawById.get(inv.id) : undefined;
+    const pending: string[] = [];
+    if (inv && raw && inv.published && !raw.published) pending.push("điện, nước và phí khác");
+    if (inv && raw && inv.rent_published && !raw.rent_published) pending.push(rentLabel(room.rent_cycle).toLowerCase());
+    return (
+      <p className="rounded-xl bg-warn-bg px-3 py-2.5 text-sm font-medium text-warn">
+        Chế độ xem trước của chủ trọ.{" "}
+        {pending.length > 0
+          ? `Chưa công bố: ${pending.join(", ")}. Người thuê chưa thấy phần này.`
+          : "Phần này người thuê đã thấy."}
+      </p>
+    );
+  };
 
   // Đầu trang: cùng khuôn với các thẻ bên dưới (biểu tượng tròn + tiêu đề), phần chọn tháng gộp chung một thẻ
   const roomTitle = /^phòng\b/i.test(room.name) ? room.name : `Phòng ${room.name}`;
@@ -97,6 +133,7 @@ export default async function TenantPage({
   if (invoices.length === 0) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
+        {previewBanner()}
         {header(null)}
         <p className="card text-sm text-muted">
           Chưa có hóa đơn nào được gửi lên. Khi chủ trọ công bố hóa đơn, bạn sẽ thấy ở đây. Hãy lưu lại link này để xem
@@ -106,7 +143,6 @@ export default async function TenantPage({
     );
   }
 
-  const sp = await searchParams;
   const m = first(sp.m);
   const idx = isPeriod(m) ? invoices.findIndex((i) => i.period === m) : -1;
   const selIdx = idx >= 0 ? idx : invoices.length - 1;
@@ -217,6 +253,7 @@ export default async function TenantPage({
           <PaymentWatcher key={p.part} token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} />
         ) : null,
       )}
+      {previewBanner(inv)}
       {header(
         <section aria-labelledby="months" className="flex flex-col gap-2 border-t border-line pt-3">
           <h2 id="months" className="text-sm font-semibold">
@@ -228,7 +265,7 @@ export default async function TenantPage({
               return (
                 <Link
                   key={i.period}
-                  href={`/p/${token}?m=${i.period}`}
+                  href={monthHref(i.period)}
                   aria-current={active ? "page" : undefined}
                   className={`flex min-h-14 min-w-[112px] shrink-0 flex-col justify-center py-1 rounded-xl border px-3 no-underline ${
                     active ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"
@@ -567,7 +604,7 @@ export default async function TenantPage({
           {[...invoices].reverse().map((i) => (
             <li key={i.period} className="border-b border-line last:border-0">
               <Link
-                href={`/p/${token}?m=${i.period}`}
+                href={monthHref(i.period)}
                 className={`flex min-h-[60px] items-center justify-between gap-3 rounded-xl px-3 py-2 no-underline ${
                   i.period === inv.period ? "bg-accent-soft" : ""
                 }`}
