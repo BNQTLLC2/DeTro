@@ -51,19 +51,13 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
         </SubmitButton>
       </ActionForm>
 
-      <section className="card flex flex-col gap-3">
-        <h2 className="text-base font-bold">Link xem hóa đơn của người thuê</h2>
+      <section className="card">
         <TokenPanel
           roomId={r.id}
           initialToken={r.token}
           roomName={r.name}
           tenantName={r.tenant_name}
-          phone={r.tenant_phone.replace(/\D/g, "")}
         />
-        <p className="text-xs text-muted">
-          Người thuê chỉ thấy các tháng bạn đã bấm công bố. Khi người thuê trả
-          phòng hoặc đổi người, hãy tạo lại link.
-        </p>
       </section>
     </main>
   );
