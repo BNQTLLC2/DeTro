@@ -62,7 +62,7 @@ export function PaymentWatcher({
           last.current = s;
           router.refresh();
         } else if (manual) {
-          setMsg({ text: "Chưa thấy tiền về. Nếu vừa chuyển, đợi một lát rồi bấm lại.", tone: "info" });
+          setMsg({ text: "Chưa nhận được tiền. Nếu vừa chuyển, đợi một lát rồi bấm lại.", tone: "info" });
         }
       } catch {
         if (manual) setMsg({ text: "Chưa kết nối được. Kiểm tra mạng rồi bấm lại.", tone: "warn" });

@@ -7,8 +7,6 @@ import { FontSizeToggle } from "@/components/FontSizeToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   dmy,
-  feeDueDate,
-  rentDueDate,
   rentLabel,
   rentRangeFull,
   moneyD,
@@ -124,10 +122,10 @@ export default async function TenantPage({
   const prevRes = prev ? invoiceResult(prev) : null;
 
   const rentTitle = rentLabel(room.rent_cycle); // "Tiền trọ" hoặc "Tiền trọ 3 tháng"
-  // Tiền trọ thu nhiều tháng một lần thì ghi rõ chu kỳ (từ ngày đến ngày); thu mỗi tháng thì không cần.
+  // Tiền trọ thu nhiều tháng một lần thì ghi rõ kỳ thuê (từ ngày đến ngày); thu mỗi tháng thì không cần.
   const rentCycleText =
     room.rent_cycle > 1
-      ? `Chu kỳ: ${rentRangeFull(inv.period, room.move_in_date, room.billing_day, room.rent_cycle)}`
+      ? `Kỳ thuê: ${rentRangeFull(inv.period, room.move_in_date, room.billing_day, room.rent_cycle)}`
       : undefined;
 
   // Các phần của tổng tiền, bỏ khoản bằng 0
@@ -260,7 +258,6 @@ export default async function TenantPage({
               range: rentCycleText,
               items: [],
               amount: inv.rent,
-              due: rentDueDate(inv.period, room.move_in_date, room.billing_day),
               paidAt: inv.rent_paid_at,
             },
             {
@@ -268,7 +265,6 @@ export default async function TenantPage({
               short: "điện, nước, phí khác",
               items: otherItems,
               amount: res.othersTotal,
-              due: feeDueDate(inv.period, room.billing_day, settings.fee_day),
               paidAt: inv.paid_at,
             },
           ]}
@@ -284,7 +280,6 @@ export default async function TenantPage({
             paid={rentPaid}
             partial={rentPartial}
             paidAt={inv.rent_paid_at}
-            due={rentDueDate(inv.period, room.move_in_date, room.billing_day)}
           />
         ) : null}
         {otherShown ? (
@@ -296,7 +291,6 @@ export default async function TenantPage({
             paid={otherPaid}
             partial={otherPartial}
             paidAt={inv.paid_at}
-            due={feeDueDate(inv.period, room.billing_day, settings.fee_day)}
           />
         ) : (
           <section className="card text-sm text-muted">
@@ -518,7 +512,7 @@ export default async function TenantPage({
               </dl>
               <p className="text-center text-sm leading-6 text-muted">
                 Chuyển đúng số tiền, không cần nhập nội dung.{" "}
-                {autoConfirm ? "Hệ thống tự cập nhật khi tiền về." : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
+                {autoConfirm ? "Hệ thống tự cập nhật khi nhận được tiền." : "Chủ trọ sẽ xác nhận sau khi nhận được tiền."}
               </p>
               <PaymentWatcher token={token} invoiceId={p.invoiceId} part={p.part} paid={p.paid} received={p.received} showButton />
             </div>
@@ -603,7 +597,6 @@ function CollectCard({
   paid,
   partial = false,
   paidAt,
-  due,
 }: {
   title: string;
   month: string;
@@ -613,7 +606,6 @@ function CollectCard({
   paid: boolean;
   partial?: boolean;
   paidAt: string | null;
-  due: string;
 }) {
   return (
     <section className="card flex flex-col gap-1">
@@ -631,9 +623,7 @@ function CollectCard({
       {items && items.length > 0 ? <ItemList items={items} className="mt-2 rounded-xl border border-line px-3" /> : null}
       {paid && paidAt ? (
         <p className="mt-1 text-sm font-semibold text-ok">Đã nhận tiền ngày {dmy(new Date(paidAt + "T00:00:00Z"))}</p>
-      ) : (
-        <p className="mt-1 text-sm font-semibold text-bad">Hạn đóng tiền: {due}</p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -649,10 +639,9 @@ function MergedCollectCard({
   month: string;
   paid: boolean;
   partial?: boolean;
-  lines: { label: string; short: string; items: Item[]; range?: string; amount: number; due: string; paidAt: string | null }[];
+  lines: { label: string; short: string; items: Item[]; range?: string; amount: number; paidAt: string | null }[];
 }) {
   const total = lines.reduce((t, l) => t + l.amount, 0);
-  const dues = [...new Set(lines.map((l) => l.due))];
   const paidDates = [...new Set(lines.map((l) => l.paidAt).filter((d): d is string => !!d))];
   return (
     <section className="card flex flex-col gap-1">
@@ -687,12 +676,6 @@ function MergedCollectCard({
                 .filter((l) => l.paidAt)
                 .map((l) => `${l.short} ngày ${dmy(new Date(l.paidAt! + "T00:00:00Z"))}`)
                 .join(", ")}`}
-        </p>
-      ) : !paid ? (
-        <p className="mt-1 text-sm font-semibold text-bad">
-          {dues.length === 1
-            ? `Hạn đóng tiền: ${dues[0]}`
-            : `Hạn đóng tiền: ${lines.map((l) => `${l.short} ${l.due}`).join(", ")}`}
         </p>
       ) : null}
     </section>
