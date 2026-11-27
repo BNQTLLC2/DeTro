@@ -120,6 +120,19 @@ export default async function EnterReadings({
         : waterDone
           ? { text: "Thiếu điện", cls: "bg-warn-bg text-warn" }
           : { text: "Chưa nhập", cls: "bg-idle-bg text-muted" };
+  // Sơ đồ nhà: gom phòng theo tầng (chữ số đầu của số phòng, ví dụ 203 là tầng 2), tầng cao ở trên.
+  const floorOf = (name: string) => {
+    const d = name.match(/\d+/)?.[0] ?? "";
+    return d.length >= 3 ? Number(d[0]) : 0;
+  };
+  const floorMap = new Map<number, typeof rooms>();
+  for (const r of rooms) floorMap.set(floorOf(r.name), [...(floorMap.get(floorOf(r.name)) ?? []), r]);
+  const floors = [...floorMap.entries()].sort((x, y) => y[0] - x[0]).map(([floor, rs]) => ({ floor, rooms: rs }));
+  const doneCount = rooms.filter((r) => {
+    const i = byRoom.get(r.id);
+    const rr = i ? invoiceResult(i) : null;
+    return rr?.elecState === "ok" && rr?.waterState === "ok";
+  }).length;
   const published = !!inv?.published;
   const price = inv?.elec_price ?? settings.elec_price;
   const quotaPer = inv?.water_quota ?? settings.water_quota;
@@ -131,40 +144,56 @@ export default async function EnterReadings({
     <main>
       {header}
 
-      <nav
-        aria-label="Chọn phòng"
-        className="-mx-4 mb-4 no-scrollbar flex gap-2 overflow-x-auto px-4 pb-1"
-      >
-        {rooms.map((r) => {
-          const i = byRoom.get(r.id);
-          const rr = i ? invoiceResult(i) : null;
-          const active = r.id === selected.id;
-          const elecOk = rr?.elecState === "ok";
-          const waterOk = rr?.waterState === "ok";
-          return (
-            <Link
-              key={r.id}
-              href={`/admin/nhap-so?m=${period}&room=${r.id}`}
-              aria-current={active ? "true" : undefined}
-              className={`flex min-w-[88px] flex-1 shrink-0 basis-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2 no-underline ${
-                active
-                  ? "border-accent bg-accent-soft"
-                  : "border-line bg-surface"
-              }`}
-            >
-              <span className="whitespace-nowrap text-base font-bold">
-                {r.name}
+      <nav aria-label="Chọn phòng" className="mb-4 flex flex-col gap-2">
+        <p className="flex items-center gap-3 text-sm text-muted">
+          <span>
+            Đã nhập đủ <b className="text-ink">{doneCount}/{rooms.length}</b> phòng
+          </span>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
+            <span
+              className="block h-full rounded-full bg-accent"
+              style={{ width: `${rooms.length ? (doneCount / rooms.length) * 100 : 0}%` }}
+            />
+          </span>
+        </p>
+        <div className="card flex flex-col gap-2 !p-3">
+          {floors.map((f) => (
+            <div key={f.floor} className="grid grid-cols-[2.25rem_1fr] items-stretch gap-2">
+              <span className="grid place-items-center rounded-lg bg-idle-bg text-xs font-bold text-muted">
+                {f.floor > 0 ? `T${f.floor}` : "Khác"}
               </span>
-              <span className="flex items-center gap-1.5">
-                <MeterBadge kind="elec" on={elecOk} />
-                <MeterBadge kind="water" on={waterOk} />
-              </span>
-              <span className="sr-only">
-                Điện {elecOk ? "đã" : "chưa"} nhập, nước {waterOk ? "đã" : "chưa"} nhập
-              </span>
-            </Link>
-          );
-        })}
+              <div className="grid grid-cols-3 gap-1.5">
+                {f.rooms.map((r) => {
+                  const i = byRoom.get(r.id);
+                  const rr = i ? invoiceResult(i) : null;
+                  const elecOk = rr?.elecState === "ok";
+                  const waterOk = rr?.waterState === "ok";
+                  const tone = elecOk && waterOk ? "bg-ok-bg" : elecOk || waterOk ? "bg-warn-bg" : "bg-idle-bg";
+                  const active = r.id === selected.id;
+                  return (
+                    <Link
+                      key={r.id}
+                      href={`/admin/nhap-so?m=${period}&room=${r.id}`}
+                      aria-current={active ? "true" : undefined}
+                      className={`flex min-w-0 flex-col items-center gap-1.5 rounded-[10px] border-2 px-1 py-2 no-underline ${tone} ${
+                        active ? "border-accent ring-2 ring-accent-soft" : "border-transparent"
+                      }`}
+                    >
+                      <span className="max-w-full truncate text-base font-bold leading-none">{r.name}</span>
+                      <span className="flex items-center gap-1">
+                        <MeterBadge kind="elec" on={elecOk} size={20} />
+                        <MeterBadge kind="water" on={waterOk} size={20} />
+                      </span>
+                      <span className="sr-only">
+                        Điện {elecOk ? "đã" : "chưa"} nhập, nước {waterOk ? "đã" : "chưa"} nhập
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       </nav>
 
       <section className="card mb-3 flex flex-col gap-3">
