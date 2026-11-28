@@ -3,7 +3,7 @@
 export type MeterKind = "elec" | "water";
 export type MeterResult = { ok: true; reading: number } | { ok: false; code: "no_key" | "quota" | "unreadable" | "error"; message: string };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.8-flash";
 
 export function meterPrompt(kind: MeterKind): string {
   const what =
