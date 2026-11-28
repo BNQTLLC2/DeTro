@@ -49,7 +49,7 @@ async function postWithRetry(body: string): Promise<Response> {
 type Shot =
   | { status: "idle" }
   | { status: "reading"; url: string }
-  | { status: "done"; url: string; value: number; unsure?: boolean }
+  | { status: "done"; url: string; value: number; unsure?: boolean; raw?: string }
   | { status: "error"; url: string | null; message: string };
 
 /** Thu nhỏ ảnh về tối đa 1600px, JPEG; chữ số LCD nhỏ nên thu nhỏ quá mức sẽ làm mô hình đọc nhầm. */
@@ -104,7 +104,7 @@ export function ReadingForm(p: Props) {
     }
     try {
       const res = await postWithRetry(JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }));
-      let j: { ok: boolean; reading?: number; unsure?: boolean; message?: string } | null = null;
+      let j: { ok: boolean; reading?: number; unsure?: boolean; raw?: string; message?: string } | null = null;
       try {
         j = await res.json();
       } catch {
@@ -123,7 +123,7 @@ export function ReadingForm(p: Props) {
       }
       if (j.ok && typeof j.reading === "number") {
         setEnd(String(j.reading));
-        setShot({ status: "done", url, value: j.reading, unsure: j.unsure === true });
+        setShot({ status: "done", url, value: j.reading, unsure: j.unsure === true, raw: j.raw });
       } else {
         fail(j.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
       }
@@ -234,6 +234,9 @@ export function ReadingForm(p: Props) {
               </button>
             </div>
           )}
+          {shot.status === "done" && shot.raw ? (
+            <p className="text-xs text-muted">Groq đọc được chuỗi: {shot.raw}</p>
+          ) : null}
           {shot.status === "error" ? (
             <p role="alert" className="rounded-xl bg-bad-bg p-3 text-sm font-semibold text-bad">
               {shot.message}

@@ -1,7 +1,7 @@
 // Đọc số trên ảnh đồng hồ điện/nước bằng mô hình thị giác của Groq (rất nhanh, có gói miễn phí).
 // Khóa API chỉ nằm ở máy chủ (biến GROQ_API_KEY), trình duyệt không bao giờ thấy.
 export type MeterKind = "elec" | "water";
-export type MeterResult = { ok: true; reading: number; unsure?: true } | { ok: false; code: "no_key" | "quota" | "unreadable" | "error"; message: string };
+export type MeterResult = { ok: true; reading: number; unsure?: true; raw?: string } | { ok: false; code: "no_key" | "quota" | "unreadable" | "error"; message: string };
 
 const DEFAULT_MODEL = "qwen/qwen3.8-27b";
 
@@ -36,32 +36,64 @@ const UNREADABLE: MeterResult = {
   message: "Chưa đọc được số trên ảnh (ảnh mờ hoặc bị chói). Chụp lại gần hơn, tránh bóng đèn, hoặc nhập tay.",
 };
 
+/**
+ * Đồng hồ nước cơ có vách ngăn nghiêng giữa các ô số; mô hình hay đọc mỗi vách thành một số "1",
+ * ví dụ ô thật "0 0 9 7" thành "0101917". Nếu mọi ký tự ở vị trí lẻ đều là "1" thì đó chính là vách, bỏ đi.
+ * Chuỗi quá ngắn thì giữ nguyên vì không phân biệt được với số thật.
+ */
+export function dropSeparatorOnes(digits: string): string {
+  if (digits.length < 5 || digits.includes(".")) return digits;
+  const odd = [...digits].filter((_, i) => i % 2 === 1);
+  if (odd.length < 2 || !odd.every((c) => c === "1")) return digits;
+  return [...digits].filter((_, i) => i % 2 === 0).join("");
+}
+
 /** Lấy số từ đoạn JSON mô hình trả về; kiểm tra chặt vì số này sẽ điền vào ô nhập. */
-export function parseReadingJson(text: string): MeterResult {
+export function parseReadingJson(text: string, kind?: MeterKind): MeterResult {
   try {
     // Một số mô hình bọc JSON trong ```json ... ``` hoặc thêm chữ thừa, nên cắt lấy cặp { } đầu tiên.
     const m = /\{[\s\S]*\}/.exec(text);
     const j = JSON.parse(m ? m[0] : text) as { readable?: unknown; reading?: unknown; digits?: unknown; unsure?: unknown };
     if (j.readable !== true) return UNREADABLE;
     let value: number | null = null;
+    let stripped = false;
     if (typeof j.digits === "string") {
       // Chuỗi chữ số giữ nguyên số 0 đứng đầu ("00060.0"), nên mô hình khó nuốt mất một chữ số như khi trả thẳng một con số.
-      const d = j.digits.replace(/[\s_]/g, "").replace(",", ".");
+      let d = j.digits.replace(/[\s_]/g, "").replace(",", ".");
+      if (kind === "water") {
+        const fixed = dropSeparatorOnes(d);
+        if (fixed !== d) {
+          d = fixed;
+          stripped = true;
+        }
+      }
       if (/^\d+(\.\d+)?$/.test(d)) value = Number(d);
     } else if (typeof j.reading === "number") {
       value = j.reading;
     }
     if (value === null || !Number.isFinite(value) || value < 0 || value >= 10_000_000) return UNREADABLE;
-    return j.unsure === true ? { ok: true, reading: value, unsure: true } : { ok: true, reading: value };
+    return j.unsure === true || stripped ? { ok: true, reading: value, unsure: true } : { ok: true, reading: value };
   } catch {
     return UNREADABLE;
   }
 }
 
 /** Phản hồi của Groq (chat.completions, định dạng giống OpenAI). */
-export function parseGroqReply(data: unknown): MeterResult {
+export function parseGroqReply(data: unknown, kind?: MeterKind): MeterResult {
   const d = data as { choices?: { message?: { content?: string } }[] };
-  return parseReadingJson(d?.choices?.[0]?.message?.content ?? "");
+  return parseReadingJson(d?.choices?.[0]?.message?.content ?? "", kind);
+}
+
+/** Chuỗi chữ số thô mô hình đã trả (ví dụ "0097"), để hiển thị cho người dùng đối chiếu với ảnh. */
+function digitsOf(raw: unknown): string | undefined {
+  try {
+    const d = raw as { choices?: { message?: { content?: string } }[] };
+    const m = /\{[\s\S]*\}/.exec(d?.choices?.[0]?.message?.content ?? "");
+    const j = JSON.parse(m ? m[0] : "") as { digits?: unknown };
+    return typeof j.digits === "string" ? j.digits.slice(0, 20) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Gắn vài chữ mô hình đã trả vào thông báo "không đọc được", để biết nó thấy gì (hoặc trả rỗng) khi gỡ lỗi. */
@@ -140,8 +172,8 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
       return { ok: false, code: "error", message: `Groq trả lỗi mã ${res.status}: ${why}.${detail ? ` Groq nói: ${detail}` : ""}` };
     }
     const raw1: unknown = await res.json();
-    const first = parseGroqReply(raw1);
-    if (first.ok) return first;
+    const first = parseGroqReply(raw1, kind);
+    if (first.ok) return { ...first, raw: digitsOf(raw1) };
     // Lần đầu không đọc được: thử thêm một lần ở chế độ "suy nghĩ" (chậm hơn nhưng đọc ảnh khó tốt hơn),
     // chỉ khi còn đủ thời gian trong giới hạn 30 giây của máy chủ.
     let last = raw1;
@@ -151,8 +183,8 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
         const retry = await call(false, left);
         if (retry.ok) {
           const raw2: unknown = await retry.json();
-          const second = parseGroqReply(raw2);
-          if (second.ok) return second;
+          const second = parseGroqReply(raw2, kind);
+          if (second.ok) return { ...second, raw: digitsOf(raw2) };
           last = raw2;
         }
       } catch {
