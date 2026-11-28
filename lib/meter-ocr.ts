@@ -60,8 +60,10 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
     return { ok: false, code: "no_key", message: "Chưa cấu hình GEMINI_API_KEY nên chưa đọc ảnh được. Hãy nhập tay." };
   }
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  // Đọc số trên ảnh không cần "suy nghĩ" lâu; để mặc định mô hình có thể mất hơn 25 giây. Nếu mô hình không nhận
+  // tham số này (HTTP 400) thì gọi lại không kèm tham số.
+  const call = (lite: boolean) =>
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
@@ -74,10 +76,14 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
             properties: { readable: { type: "BOOLEAN" }, reading: { type: "NUMBER", nullable: true } },
             required: ["readable"],
           },
+          ...(lite ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}),
         },
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(lite ? 18_000 : 10_000),
     });
+  try {
+    let res = await call(true);
+    if (res.status === 400) res = await call(false);
     if (res.status === 429) {
       return { ok: false, code: "quota", message: "Đã hết hạn mức đọc ảnh miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." };
     }
@@ -86,7 +92,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
   } catch (err) {
     const e = err as { name?: string; message?: string; cause?: { code?: string } };
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
-      return { ok: false, code: "error", message: "Google trả lời quá chậm (hơn 25 giây). Thử lại, hoặc đổi GEMINI_MODEL sang mô hình Flash nhẹ hơn." };
+      return { ok: false, code: "error", message: "Google trả lời quá chậm. Bấm Chụp lại để thử lần nữa, hoặc nhập tay." };
     }
     const why = [e?.cause?.code, e?.message].filter(Boolean).join(" ");
     return { ok: false, code: "error", message: `Máy chủ không gọi được Google${why ? ` (${why.slice(0, 120)})` : ""}. Nhập tay nếu cần.` };

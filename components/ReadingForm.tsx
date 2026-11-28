@@ -28,10 +28,10 @@ type Shot =
   | { status: "done"; url: string; value: number }
   | { status: "error"; url: string | null; message: string };
 
-/** Thu nhỏ ảnh về tối đa 1280px, JPEG, để gửi nhanh và không vượt giới hạn dung lượng. */
+/** Thu nhỏ ảnh về tối đa 1600px, JPEG, để gửi nhanh mà vẫn đủ nét cho màn hình số nhỏ. */
 async function shrink(file: File): Promise<string> {
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * scale);
   c.height = Math.round(bmp.height * scale);
