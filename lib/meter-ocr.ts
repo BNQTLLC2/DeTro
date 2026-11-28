@@ -3,7 +3,7 @@
 export type MeterKind = "elec" | "water";
 export type MeterResult = { ok: true; reading: number } | { ok: false; code: "no_key" | "quota" | "unreadable" | "error"; message: string };
 
-const DEFAULT_MODEL = "gemini-4-hydrogen";
+const DEFAULT_MODEL = "gemini-flash-latest";
 // Mức "suy nghĩ" thấp nhất mà mô hình cho phép (xem ô Thinking level trong AI Studio). Mặc định của Google là High nên rất chậm.
 const DEFAULT_THINKING = "minimal";
 
