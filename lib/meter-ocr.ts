@@ -5,7 +5,7 @@ export type MeterResult = { ok: true; reading: number } | { ok: false; code: "no
 
 const DEFAULT_MODEL = "gemini-flash-latest";
 // Mức "suy nghĩ" thấp nhất mà mô hình cho phép (xem ô Thinking level trong AI Studio). Mặc định của Google là High nên rất chậm.
-const DEFAULT_THINKING = "minimal";
+const DEFAULT_THINKING = "low"; // gemini-flash-latest báo không nhận "minimal"; "low" là mức thấp nhất còn lại
 
 export function meterPrompt(kind: MeterKind): string {
   const what =
@@ -64,7 +64,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
   const primary = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const fallback = (process.env.GEMINI_FALLBACK_MODEL ?? "").trim();
   // Thử lần lượt các mức suy nghĩ thấp; mô hình nào không nhận mức nào thì Google trả 400 rất nhanh và ta thử mức kế tiếp.
-  const levels = (process.env.GEMINI_THINKING_LEVEL ? [process.env.GEMINI_THINKING_LEVEL.toLowerCase()] : [DEFAULT_THINKING, "low"]).filter(Boolean);
+  const levels = (process.env.GEMINI_THINKING_LEVEL ? [process.env.GEMINI_THINKING_LEVEL.toLowerCase()] : [DEFAULT_THINKING]).filter(Boolean);
   let rejected = ""; // lời Google khi từ chối tham số suy nghĩ, để hiện trong thông báo lỗi
   let usedLevel = "mặc định của Google";
   const t0 = Date.now();
@@ -88,7 +88,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
           ...(level ? { thinkingConfig: { thinkingLevel: level } } : {}),
         },
       }),
-      signal: AbortSignal.timeout(Math.max(3_000, Math.min(25_000, left()))),
+      signal: AbortSignal.timeout(Math.max(3_000, Math.min(22_000, left()))),
     });
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
