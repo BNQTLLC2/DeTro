@@ -28,16 +28,16 @@ type Shot =
   | { status: "done"; url: string; value: number }
   | { status: "error"; url: string | null; message: string };
 
-/** Thu nhỏ ảnh về tối đa 1600px, JPEG, để gửi nhanh mà vẫn đủ nét cho màn hình số nhỏ. */
+/** Thu nhỏ ảnh về tối đa 1024px, JPEG, để tải lên nhanh nhất mà chữ số vẫn đủ nét. */
 async function shrink(file: File): Promise<string> {
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * scale);
   c.height = Math.round(bmp.height * scale);
   c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
   bmp.close();
-  return c.toDataURL("image/jpeg", 0.85);
+  return c.toDataURL("image/jpeg", 0.8);
 }
 
 /** Form nhập số điện hoặc nước cho một phòng, tính thử tiền ngay khi gõ. */
@@ -88,7 +88,7 @@ export function ReadingForm(p: Props) {
           res.status === 413
             ? "Ảnh quá lớn. Hãy chụp lại."
             : res.status === 504 || res.status === 408
-              ? "Máy chủ xử lý quá lâu nên bị ngắt. Thử lại, hoặc đổi GEMINI_MODEL sang mô hình Flash nhẹ hơn."
+              ? "Máy chủ xử lý quá lâu nên bị ngắt. Bấm Chụp lại, hoặc nhập tay."
               : `Máy chủ trả lỗi không đọc được (mã ${res.status}). Thử lại hoặc nhập tay.`,
         );
         if (fileRef.current) fileRef.current.value = "";
