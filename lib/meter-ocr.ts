@@ -61,11 +61,13 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
   if (!key) {
     return { ok: false, code: "no_key", message: "Chưa cấu hình GEMINI_API_KEY nên chưa đọc ảnh được. Hãy nhập tay." };
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const primary = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const fallback = (process.env.GEMINI_FALLBACK_MODEL ?? "").trim();
   const thinking = (process.env.GEMINI_THINKING_LEVEL || DEFAULT_THINKING).toLowerCase();
-  // Đọc số trên ảnh không cần "suy nghĩ" lâu; để mặc định mô hình có thể mất hơn 25 giây. Nếu mô hình không nhận
-  // tham số này (HTTP 400) thì gọi lại không kèm tham số.
-  const call = (lite: boolean) =>
+  const t0 = Date.now();
+  const BUDGET = 55_000; // Vercel cho chạy tối đa 60 giây (maxDuration của route)
+  const left = () => BUDGET - (Date.now() - t0);
+  const call = (model: string, lite: boolean) =>
     fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
@@ -79,23 +81,43 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
             properties: { readable: { type: "BOOLEAN" }, reading: { type: "NUMBER", nullable: true } },
             required: ["readable"],
           },
+          // Đọc số không cần "suy nghĩ" lâu; nếu mô hình không nhận tham số này (HTTP 400) thì gọi lại không kèm.
           ...(lite ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
         },
       }),
-      signal: AbortSignal.timeout(lite ? 35_000 : 20_000),
+      signal: AbortSignal.timeout(Math.max(3_000, Math.min(25_000, left()))),
     });
-  const t0 = Date.now();
-  let stage = `lần gọi 1 (suy nghĩ mức "${thinking}")`;
-  try {
-    let res = await call(true);
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // Thử mô hình chính, gặp 500/503 (Google đang quá tải) thì chờ chút thử lại một lần, rồi mới sang mô hình dự phòng (nếu có).
+  async function tryModel(model: string): Promise<Response> {
+    let lite = true;
+    let res = await call(model, lite);
     if (res.status === 400) {
-      stage = "lần gọi 2 (không kèm tham số suy nghĩ, vì lần 1 bị Google từ chối với mã 400)";
-      res = await call(false);
+      lite = false;
+      res = await call(model, lite);
+    }
+    if ((res.status === 503 || res.status === 500) && left() > 8_000) {
+      await sleep(2_000);
+      res = await call(model, lite);
+    }
+    return res;
+  }
+
+  let used = primary;
+  try {
+    let res = await tryModel(primary);
+    if ((res.status === 503 || res.status === 500 || res.status === 429 || res.status === 404) && fallback && fallback !== primary && left() > 8_000) {
+      used = fallback;
+      res = await tryModel(fallback);
     }
     if (res.status === 429) {
       return { ok: false, code: "quota", message: "Đã hết hạn mức đọc ảnh miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." };
     }
-    if (!res.ok) return { ok: false, code: "error", message: await googleError(res, model) };
+    if (res.status === 503 || res.status === 500) {
+      return { ok: false, code: "error", message: `Google đang quá tải với mô hình ${used} (mã ${res.status}), thường chỉ vài phút. Bấm Chụp lại sau chút, hoặc nhập tay.` };
+    }
+    if (!res.ok) return { ok: false, code: "error", message: await googleError(res, used) };
     return parseMeterReply(await res.json());
   } catch (err) {
     const e = err as { name?: string; message?: string; cause?: { code?: string } };
@@ -104,7 +126,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
       return {
         ok: false,
         code: "error",
-        message: `Google trả lời quá chậm (đã chờ ${sec} giây ở ${stage}, mô hình ${model}). Bấm Chụp lại để thử lần nữa, hoặc nhập tay.`,
+        message: `Google trả lời quá chậm (đã chờ ${sec} giây, mô hình ${used}, mức suy nghĩ "${thinking}"). Bấm Chụp lại để thử lần nữa, hoặc nhập tay.`,
       };
     }
     const why = [e?.cause?.code, e?.message].filter(Boolean).join(" ");
