@@ -13,6 +13,10 @@ describe("parseGroqReply", () => {
     expect(parseGroqReply(g('{"readable":true,"digits":"0006 0,0"}'))).toEqual({ ok: true, reading: 60 });
     expect(parseGroqReply(g('{"readable":true,"digits":"00x60.0"}')).ok).toBe(false);
   });
+  it("đọc được nhưng chưa chắc thì vẫn trả số kèm cờ unsure", () => {
+    expect(parseGroqReply(g('{"readable":true,"digits":"00060.0","unsure":true}'))).toEqual({ ok: true, reading: 60, unsure: true });
+    expect(parseGroqReply(g('{"readable":true,"digits":"00060.0","unsure":false}'))).toEqual({ ok: true, reading: 60 });
+  });
   it("không chắc hoặc sai định dạng thì báo chưa đọc được", () => {
     expect(parseGroqReply(g('{"readable":false,"reading":null}')).ok).toBe(false);
     expect(parseGroqReply(g('{"readable":true,"reading":null}')).ok).toBe(false);

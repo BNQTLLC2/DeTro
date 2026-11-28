@@ -49,7 +49,7 @@ async function postWithRetry(body: string): Promise<Response> {
 type Shot =
   | { status: "idle" }
   | { status: "reading"; url: string }
-  | { status: "done"; url: string; value: number }
+  | { status: "done"; url: string; value: number; unsure?: boolean }
   | { status: "error"; url: string | null; message: string };
 
 /** Thu nhỏ ảnh về tối đa 1600px, JPEG; chữ số LCD nhỏ nên thu nhỏ quá mức sẽ làm mô hình đọc nhầm. */
@@ -104,7 +104,7 @@ export function ReadingForm(p: Props) {
     }
     try {
       const res = await postWithRetry(JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }));
-      let j: { ok: boolean; reading?: number; message?: string } | null = null;
+      let j: { ok: boolean; reading?: number; unsure?: boolean; message?: string } | null = null;
       try {
         j = await res.json();
       } catch {
@@ -123,7 +123,7 @@ export function ReadingForm(p: Props) {
       }
       if (j.ok && typeof j.reading === "number") {
         setEnd(String(j.reading));
-        setShot({ status: "done", url, value: j.reading });
+        setShot({ status: "done", url, value: j.reading, unsure: j.unsure === true });
       } else {
         fail(j.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
       }
@@ -212,9 +212,15 @@ export function ReadingForm(p: Props) {
           ) : (
             <div className="flex items-center justify-between gap-2">
               {shot.status === "done" ? (
-                <span className="rounded-full bg-accent-soft px-3 py-1 text-sm font-semibold text-accent">
-                  ✓ Đọc từ ảnh: <b>{fmtNum(shot.value)}</b>
-                </span>
+                shot.unsure ? (
+                  <span className="rounded-xl bg-warn-bg px-3 py-1 text-sm font-semibold text-warn">
+                    ⚠ Đọc từ ảnh: <b>{fmtNum(shot.value)}</b>. Chưa chắc, hãy đối chiếu với ảnh trước khi lưu.
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-accent-soft px-3 py-1 text-sm font-semibold text-accent">
+                    ✓ Đọc từ ảnh: <b>{fmtNum(shot.value)}</b>
+                  </span>
+                )
               ) : null}
               <button
                 type="button"
