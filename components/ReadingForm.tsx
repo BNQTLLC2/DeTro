@@ -28,16 +28,16 @@ type Shot =
   | { status: "done"; url: string; value: number }
   | { status: "error"; url: string | null; message: string };
 
-/** Thu nhỏ ảnh về tối đa 1024px, JPEG, để tải lên nhanh nhất mà chữ số vẫn đủ nét. */
+/** Thu nhỏ ảnh về tối đa 1600px, JPEG; chữ số LCD nhỏ nên thu nhỏ quá mức sẽ làm mô hình đọc nhầm. */
 async function shrink(file: File): Promise<string> {
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * scale);
   c.height = Math.round(bmp.height * scale);
   c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
   bmp.close();
-  return c.toDataURL("image/jpeg", 0.8);
+  return c.toDataURL("image/jpeg", 0.88);
 }
 
 /** Form nhập số điện hoặc nước cho một phòng, tính thử tiền ngay khi gõ. */

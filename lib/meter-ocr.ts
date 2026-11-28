@@ -8,13 +8,18 @@ const DEFAULT_MODEL = "qwen/qwen3.8-27b";
 export function meterPrompt(kind: MeterKind): string {
   const what =
     kind === "elec"
-      ? "an electricity meter (kWh). Read the cumulative reading shown on the display. Ignore any digit after the decimal point or digits shown in red or in a separate box."
-      : "a water meter (m3). Read only the black digits of the cumulative reading. Ignore the red digits and the small dials after them.";
+      ? [
+          "an electricity meter with an LCD (often a small single-phase multifunction module).",
+          "The cumulative energy in kWh is the LARGE digits on the TOP row. Leading zeros are shown (for example 00060.0 means 60.0 kWh) and the last digit after the decimal point is part of the reading.",
+          "A smaller second row, if present, shows current, voltage or power with a unit such as A, V or W. Never use that row.",
+        ].join(" ")
+      : "a water meter (m3). Read only the black digits of the cumulative reading, left to right, including leading zeros. Ignore the red digits and the small dials after them.";
   return [
     `The photo shows ${what}`,
-    "Return JSON only: {\"readable\": boolean, \"reading\": number|null}.",
-    "Set readable=false and reading=null when the digits are blurry, cut off, covered by glare or you are not sure.",
-    "Never guess a digit. Do not include units. Do not read serial numbers, dates or other numbers on the device.",
+    "First look at the digit cells of that row from left to right and transcribe EVERY cell, including leading zeros. Do not skip, merge or drop a digit, and do not drop a zero that sits before the decimal point.",
+    "Return JSON only: {\"readable\": boolean, \"digits\": string|null}, where digits is the transcription with a dot for the decimal point, for example \"00060.0\".",
+    "Set readable=false and digits=null when the digits are blurry, cut off, covered by glare or you are not sure.",
+    "Never guess a digit. Do not include units. Do not read serial numbers, dates, labels or other numbers on the device.",
   ].join(" ");
 }
 
@@ -29,10 +34,18 @@ export function parseReadingJson(text: string): MeterResult {
   try {
     // Một số mô hình bọc JSON trong ```json ... ``` hoặc thêm chữ thừa, nên cắt lấy cặp { } đầu tiên.
     const m = /\{[\s\S]*\}/.exec(text);
-    const j = JSON.parse(m ? m[0] : text) as { readable?: unknown; reading?: unknown };
-    if (j.readable !== true || typeof j.reading !== "number") return UNREADABLE;
-    if (!Number.isFinite(j.reading) || j.reading < 0 || j.reading >= 10_000_000) return UNREADABLE;
-    return { ok: true, reading: j.reading };
+    const j = JSON.parse(m ? m[0] : text) as { readable?: unknown; reading?: unknown; digits?: unknown };
+    if (j.readable !== true) return UNREADABLE;
+    let value: number | null = null;
+    if (typeof j.digits === "string") {
+      // Chuỗi chữ số giữ nguyên số 0 đứng đầu ("00060.0"), nên mô hình khó nuốt mất một chữ số như khi trả thẳng một con số.
+      const d = j.digits.replace(/[\s_]/g, "").replace(",", ".");
+      if (/^\d+(\.\d+)?$/.test(d)) value = Number(d);
+    } else if (typeof j.reading === "number") {
+      value = j.reading;
+    }
+    if (value === null || !Number.isFinite(value) || value < 0 || value >= 10_000_000) return UNREADABLE;
+    return { ok: true, reading: value };
   } catch {
     return UNREADABLE;
   }
@@ -62,7 +75,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
         temperature: 0,
         response_format: { type: "json_object" },
         // Đáp án chỉ là một đoạn JSON ngắn; tắt suy nghĩ và giới hạn độ dài để trả lời nhanh nhất.
-        ...(noThinking ? { reasoning_effort: "none", max_completion_tokens: 60 } : { max_completion_tokens: 1024 }),
+        ...(noThinking ? { reasoning_effort: "none", max_completion_tokens: 150 } : { max_completion_tokens: 1024 }),
         messages: [
           {
             role: "user",
@@ -111,7 +124,11 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
               : "Groq đang lỗi hoặc quá tải";
       return { ok: false, code: "error", message: `Groq trả lỗi mã ${res.status}: ${why}.${detail ? ` Groq nói: ${detail}` : ""}` };
     }
-    return parseGroqReply(await res.json());
+    const first = parseGroqReply(await res.json());
+    if (first.ok) return first;
+    // Lần đầu không đọc được (mờ, JSON cụt...): thử thêm đúng một lần nữa trước khi bỏ cuộc.
+    const retry = await call(noThinking);
+    return retry.ok ? parseGroqReply(await retry.json()) : first;
   } catch (err) {
     const e = err as { name?: string; message?: string };
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
