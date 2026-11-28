@@ -4,7 +4,7 @@ import { readMeter } from "@/lib/meter-ocr";
 
 export const dynamic = "force-dynamic";
 // Gemini có thể mất vài giây; mặc định của Vercel (10 giây) dễ cắt ngang làm trình duyệt báo "không kết nối".
-export const maxDuration = 30;
+export const maxDuration = 60;
 const MAX_BASE64 = 3_000_000; // ~2,2MB ảnh, dưới giới hạn 4,5MB của Vercel
 
 export async function POST(req: Request) {

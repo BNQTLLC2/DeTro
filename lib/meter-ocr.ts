@@ -3,7 +3,9 @@
 export type MeterKind = "elec" | "water";
 export type MeterResult = { ok: true; reading: number } | { ok: false; code: "no_key" | "quota" | "unreadable" | "error"; message: string };
 
-const DEFAULT_MODEL = "gemini-3.8-flash";
+const DEFAULT_MODEL = "gemini-4-hydrogen";
+// Mức "suy nghĩ" thấp nhất mà mô hình cho phép (xem ô Thinking level trong AI Studio). Mặc định của Google là High nên rất chậm.
+const DEFAULT_THINKING = "minimal";
 
 export function meterPrompt(kind: MeterKind): string {
   const what =
@@ -60,6 +62,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
     return { ok: false, code: "no_key", message: "Chưa cấu hình GEMINI_API_KEY nên chưa đọc ảnh được. Hãy nhập tay." };
   }
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const thinking = (process.env.GEMINI_THINKING_LEVEL || DEFAULT_THINKING).toLowerCase();
   // Đọc số trên ảnh không cần "suy nghĩ" lâu; để mặc định mô hình có thể mất hơn 25 giây. Nếu mô hình không nhận
   // tham số này (HTTP 400) thì gọi lại không kèm tham số.
   const call = (lite: boolean) =>
@@ -76,14 +79,19 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
             properties: { readable: { type: "BOOLEAN" }, reading: { type: "NUMBER", nullable: true } },
             required: ["readable"],
           },
-          ...(lite ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}),
+          ...(lite ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
         },
       }),
-      signal: AbortSignal.timeout(lite ? 18_000 : 10_000),
+      signal: AbortSignal.timeout(lite ? 35_000 : 20_000),
     });
+  const t0 = Date.now();
+  let stage = `lần gọi 1 (suy nghĩ mức "${thinking}")`;
   try {
     let res = await call(true);
-    if (res.status === 400) res = await call(false);
+    if (res.status === 400) {
+      stage = "lần gọi 2 (không kèm tham số suy nghĩ, vì lần 1 bị Google từ chối với mã 400)";
+      res = await call(false);
+    }
     if (res.status === 429) {
       return { ok: false, code: "quota", message: "Đã hết hạn mức đọc ảnh miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." };
     }
@@ -92,7 +100,12 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
   } catch (err) {
     const e = err as { name?: string; message?: string; cause?: { code?: string } };
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
-      return { ok: false, code: "error", message: "Google trả lời quá chậm. Bấm Chụp lại để thử lần nữa, hoặc nhập tay." };
+      const sec = Math.round((Date.now() - t0) / 1000);
+      return {
+        ok: false,
+        code: "error",
+        message: `Google trả lời quá chậm (đã chờ ${sec} giây ở ${stage}, mô hình ${model}). Bấm Chụp lại để thử lần nữa, hoặc nhập tay.`,
+      };
     }
     const why = [e?.cause?.code, e?.message].filter(Boolean).join(" ");
     return { ok: false, code: "error", message: `Máy chủ không gọi được Google${why ? ` (${why.slice(0, 120)})` : ""}. Nhập tay nếu cần.` };
