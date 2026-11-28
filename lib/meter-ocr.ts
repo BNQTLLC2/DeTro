@@ -63,11 +63,14 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
   }
   const primary = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const fallback = (process.env.GEMINI_FALLBACK_MODEL ?? "").trim();
-  const thinking = (process.env.GEMINI_THINKING_LEVEL || DEFAULT_THINKING).toLowerCase();
+  // Thử lần lượt các mức suy nghĩ thấp; mô hình nào không nhận mức nào thì Google trả 400 rất nhanh và ta thử mức kế tiếp.
+  const levels = (process.env.GEMINI_THINKING_LEVEL ? [process.env.GEMINI_THINKING_LEVEL.toLowerCase()] : [DEFAULT_THINKING, "low"]).filter(Boolean);
+  let rejected = ""; // lời Google khi từ chối tham số suy nghĩ, để hiện trong thông báo lỗi
+  let usedLevel = "mặc định của Google";
   const t0 = Date.now();
   const BUDGET = 55_000; // Vercel cho chạy tối đa 60 giây (maxDuration của route)
   const left = () => BUDGET - (Date.now() - t0);
-  const call = (model: string, lite: boolean) =>
+  const call = (model: string, level: string | null) =>
     fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
@@ -82,7 +85,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
             required: ["readable"],
           },
           // Đọc số không cần "suy nghĩ" lâu; nếu mô hình không nhận tham số này (HTTP 400) thì gọi lại không kèm.
-          ...(lite ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
+          ...(level ? { thinkingConfig: { thinkingLevel: level } } : {}),
         },
       }),
       signal: AbortSignal.timeout(Math.max(3_000, Math.min(25_000, left()))),
@@ -91,15 +94,19 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
 
   // Thử mô hình chính, gặp 500/503 (Google đang quá tải) thì chờ chút thử lại một lần, rồi mới sang mô hình dự phòng (nếu có).
   async function tryModel(model: string): Promise<Response> {
-    let lite = true;
-    let res = await call(model, lite);
-    if (res.status === 400) {
-      lite = false;
-      res = await call(model, lite);
+    let level: string | null = null;
+    let res: Response | null = null;
+    for (const l of [...levels, null]) {
+      level = l;
+      usedLevel = l ?? "mặc định của Google";
+      res = await call(model, l);
+      if (res.status !== 400) break;
+      if (l) rejected = (await res.clone().text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
     }
+    if (!res) throw new Error("no response");
     if ((res.status === 503 || res.status === 500) && left() > 8_000) {
       await sleep(2_000);
-      res = await call(model, lite);
+      res = await call(model, level);
     }
     return res;
   }
@@ -126,7 +133,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
       return {
         ok: false,
         code: "error",
-        message: `Google trả lời quá chậm (đã chờ ${sec} giây, mô hình ${used}, mức suy nghĩ "${thinking}"). Bấm Chụp lại để thử lần nữa, hoặc nhập tay.`,
+        message: `Google trả lời quá chậm (đã chờ ${sec} giây, mô hình ${used}, mức suy nghĩ: ${usedLevel}).${rejected ? ` Google từ chối mức suy nghĩ thấp: ${rejected}` : ""} Bấm Chụp lại để thử lần nữa, hoặc nhập tay.`,
       };
     }
     const why = [e?.cause?.code, e?.message].filter(Boolean).join(" ");
