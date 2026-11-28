@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ActionForm, SubmitButton, type FormAction } from "@/components/ActionForm";
+import { MeterCamera } from "@/components/MeterCamera";
 import { money } from "@/lib/format";
 
 type Common = {
@@ -21,6 +22,29 @@ type Props =
 
 const fmtNum = (n: number) =>
   String(Math.round(n * 100) / 100).replace(".", ",");
+
+/**
+ * Gửi ảnh lên máy chủ, tự thử lại tối đa 3 lần khi mạng chập chờn. Lỗi "không gửi được" hay gặp ngay sau khi
+ * quay lại từ ứng dụng máy ảnh, lúc trình duyệt chưa kịp nối lại mạng, dù mạng thực ra vẫn tốt.
+ */
+async function postWithRetry(body: string): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const timeout = typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(35_000) : undefined;
+      return await fetch("/api/meter-read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        signal: timeout,
+      });
+    } catch (err) {
+      lastErr = err;
+      if (i < 2) await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
 
 type Shot =
   | { status: "idle" }
@@ -49,8 +73,15 @@ export function ReadingForm(p: Props) {
 
   const [shot, setShot] = useState<Shot>({ status: "idle" });
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const urlRef = useRef<string | null>(null);
   useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
+
+  /** Mở camera có khung ngắm; trình duyệt không hỗ trợ thì dùng camera mặc định của máy. */
+  function openCamera() {
+    if (typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function") setCameraOpen(true);
+    else fileRef.current?.click();
+  }
 
   async function onPick(file: File | undefined) {
     if (!file) return;
@@ -72,11 +103,7 @@ export function ReadingForm(p: Props) {
       return;
     }
     try {
-      const res = await fetch("/api/meter-read", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }),
-      });
+      const res = await postWithRetry(JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }));
       let j: { ok: boolean; reading?: number; message?: string } | null = null;
       try {
         j = await res.json();
@@ -100,8 +127,9 @@ export function ReadingForm(p: Props) {
       } else {
         fail(j.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
       }
-    } catch {
-      fail("Điện thoại không gửi được ảnh lên máy chủ. Kiểm tra mạng rồi bấm Chụp lại.");
+    } catch (err) {
+      const why = ((err as { message?: string })?.message ?? "").slice(0, 60);
+      fail(`Điện thoại không gửi được ảnh lên máy chủ${why ? ` (${why})` : ""}. Kiểm tra mạng rồi bấm Chụp lại.`);
     }
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -147,10 +175,24 @@ export function ReadingForm(p: Props) {
         aria-label={`Chụp đồng hồ ${p.kind === "elec" ? "điện" : "nước"}`}
         onChange={(ev) => void onPick(ev.target.files?.[0])}
       />
+      {cameraOpen ? (
+        <MeterCamera
+          kind={p.kind}
+          onCapture={(f) => {
+            setCameraOpen(false);
+            void onPick(f);
+          }}
+          onClose={() => setCameraOpen(false)}
+          onNative={() => {
+            setCameraOpen(false);
+            fileRef.current?.click();
+          }}
+        />
+      ) : null}
       {shot.status === "idle" ? (
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={openCamera}
           className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-accent bg-accent-soft px-4 text-base font-semibold text-accent"
         >
           <CameraIcon />
@@ -176,7 +218,7 @@ export function ReadingForm(p: Props) {
               ) : null}
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
+                onClick={openCamera}
                 className="ml-auto min-h-10 shrink-0 px-1 text-sm font-semibold text-accent"
               >
                 Chụp lại
