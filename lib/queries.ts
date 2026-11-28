@@ -452,6 +452,22 @@ export async function previousEnds(
   return { elec: e[0] ? num(e[0].elec_end) : null, water: w[0] ? num(w[0].water_end) : null };
 }
 
+/** Mức dùng của kỳ liền trước (đã có đủ số đầu và số cuối), để cảnh báo khi số mới lệch bất thường. */
+export async function previousUsage(
+  roomId: number,
+  period: string,
+): Promise<{ elec: number | null; water: number | null }> {
+  const one = async (start: string, end: string) => {
+    const r = await q(
+      `select ${start} as s, ${end} as e from invoices where room_id=$1 and period < $2
+       and ${start} is not null and ${end} is not null order by period desc limit 1`,
+      [roomId, period],
+    );
+    return r[0] ? Math.max(0, Number(r[0].e) - Number(r[0].s)) : null;
+  };
+  return { elec: await one("elec_start", "elec_end"), water: await one("water_start", "water_end") };
+}
+
 export async function readingDefaults(
   room: Room,
   inv: Invoice | null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionForm, SubmitButton, type FormAction } from "@/components/ActionForm";
 import { money } from "@/lib/format";
 
@@ -11,6 +11,8 @@ type Common = {
   defaultStart: number;
   defaultEnd: number | null;
   saved: boolean;
+  /** Mức dùng kỳ trước, để cảnh báo khi số mới lệch bất thường. */
+  prevUsed?: number | null;
 };
 
 type Props =
@@ -20,12 +22,64 @@ type Props =
 const fmtNum = (n: number) =>
   String(Math.round(n * 100) / 100).replace(".", ",");
 
+type Shot =
+  | { status: "idle" }
+  | { status: "reading"; url: string }
+  | { status: "done"; url: string; value: number }
+  | { status: "error"; url: string | null; message: string };
+
+/** Thu nhỏ ảnh về tối đa 1280px, JPEG, để gửi nhanh và không vượt giới hạn dung lượng. */
+async function shrink(file: File): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  return c.toDataURL("image/jpeg", 0.85);
+}
+
 /** Form nhập số điện hoặc nước cho một phòng, tính thử tiền ngay khi gõ. */
 export function ReadingForm(p: Props) {
   const [start, setStart] = useState(String(p.defaultStart));
   const [end, setEnd] = useState(
     p.defaultEnd === null ? "" : String(p.defaultEnd),
   );
+
+  const [shot, setShot] = useState<Shot>({ status: "idle" });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const urlRef = useRef<string | null>(null);
+  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
+
+  async function onPick(file: File | undefined) {
+    if (!file) return;
+    if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    const hadPhotoValue = shot.status === "done"; // số cũ đọc từ ảnh trước, bỏ đi nếu lần chụp mới thất bại
+    const url = URL.createObjectURL(file);
+    urlRef.current = url;
+    setShot({ status: "reading", url });
+    try {
+      const dataUrl = await shrink(file);
+      const res = await fetch("/api/meter-read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }),
+      });
+      const j = (await res.json()) as { ok: boolean; reading?: number; message?: string };
+      if (j.ok && typeof j.reading === "number") {
+        setEnd(String(j.reading));
+        setShot({ status: "done", url, value: j.reading });
+      } else {
+        if (hadPhotoValue) setEnd("");
+        setShot({ status: "error", url, message: j.message ?? "Chưa đọc được ảnh. Hãy nhập tay." });
+      }
+    } catch {
+      if (hadPhotoValue) setEnd("");
+      setShot({ status: "error", url, message: "Không kết nối được để đọc ảnh. Kiểm tra mạng hoặc nhập tay." });
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  }
 
   const s = Number(start.replace(",", "."));
   const e = Number(end.replace(",", "."));
@@ -37,6 +91,9 @@ export function ReadingForm(p: Props) {
   const invalid = has && e < s;
   const ok = has && !invalid;
   const used = ok ? e - s : 0;
+  // Mức dùng gấp nhiều lần kỳ trước thường là thừa hoặc đọc sai một chữ số.
+  const odd =
+    ok && p.prevUsed != null && p.prevUsed > 0 && used >= p.prevUsed * 4 && used - p.prevUsed >= (p.kind === "elec" ? 50 : 5);
 
   const unit = p.kind === "elec" ? "kWh" : "m³";
   const dirty =
@@ -44,7 +101,9 @@ export function ReadingForm(p: Props) {
     end !== (p.defaultEnd === null ? "" : String(p.defaultEnd)) ||
     start !== String(p.defaultStart);
 
-  const submitLabel = `${p.saved ? "Cập nhật" : "Lưu"} số ${p.kind === "elec" ? "điện" : "nước"}`;
+  const submitLabel = odd
+    ? "Lưu dù sao"
+    : `${p.saved ? "Cập nhật" : "Lưu"} số ${p.kind === "elec" ? "điện" : "nước"}`;
   const tone = p.kind === "elec" ? "bg-c-elec-soft" : "bg-c-water-soft";
 
   return (
@@ -52,6 +111,60 @@ export function ReadingForm(p: Props) {
       <input type="hidden" name="room" value={p.roomId} />
       <input type="hidden" name="period" value={p.period} />
       <input type="hidden" name="kind" value={p.kind} />
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={`Chụp đồng hồ ${p.kind === "elec" ? "điện" : "nước"}`}
+        onChange={(ev) => void onPick(ev.target.files?.[0])}
+      />
+      {shot.status === "idle" ? (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-accent bg-accent-soft px-4 text-base font-semibold text-accent"
+        >
+          <CameraIcon />
+          Chụp đồng hồ để điền số
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {shot.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={shot.url} alt="Ảnh đồng hồ vừa chụp" className="max-h-56 w-full rounded-xl bg-black/80 object-contain" />
+          ) : null}
+          {shot.status === "reading" ? (
+            <p role="status" className="flex items-center gap-2.5 font-semibold">
+              <span className="size-5 animate-spin rounded-full border-[3px] border-accent-soft border-t-accent" aria-hidden="true" />
+              Đang đọc số trên ảnh...
+            </p>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              {shot.status === "done" ? (
+                <span className="rounded-full bg-accent-soft px-3 py-1 text-sm font-semibold text-accent">
+                  ✓ Đọc từ ảnh: <b>{fmtNum(shot.value)}</b>
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="ml-auto min-h-10 shrink-0 px-1 text-sm font-semibold text-accent"
+              >
+                Chụp lại
+              </button>
+            </div>
+          )}
+          {shot.status === "error" ? (
+            <p role="alert" className="rounded-xl bg-bad-bg p-3 text-sm font-semibold text-bad">
+              {shot.message}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_auto_1.3fr] items-end gap-2">
         <div>
@@ -96,6 +209,13 @@ export function ReadingForm(p: Props) {
         </p>
       ) : null}
 
+      {odd ? (
+        <p role="alert" className="rounded-xl bg-warn-bg p-3 text-sm font-semibold text-warn">
+          Mức dùng {fmtNum(used)} {unit}, cao gấp {Math.round(used / (p.prevUsed ?? 1))} lần kỳ trước ({fmtNum(p.prevUsed ?? 0)} {unit}).
+          Có thể thừa một chữ số. Kiểm tra lại số và ảnh.
+        </p>
+      ) : null}
+
       {ok ? (
         <div className={`rounded-xl p-3 ${tone}`}>
           <div className="flex items-baseline justify-between gap-3">
@@ -133,6 +253,15 @@ export function ReadingForm(p: Props) {
         </SubmitButton>
       )}
     </ActionForm>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
   );
 }
 

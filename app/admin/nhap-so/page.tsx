@@ -24,6 +24,7 @@ import {
   invoiceResult,
   listInvoices,
   listRooms,
+  previousUsage,
   readingDefaults,
 } from "@/lib/queries";
 import {
@@ -90,6 +91,7 @@ export default async function EnterReadings({
   const inv =
     byRoom.get(selected.id) ?? (await getInvoice(selected.id, period));
   const defaults = await readingDefaults(selected, inv, period);
+  const prevUsed = await previousUsage(selected.id, period);
   const feeRows = await getRoomFeeRows(selected.id);
 
   // Tạm tính: dùng số đã lưu và giá hiện hành (nếu chưa có hóa đơn thì dùng cài đặt hiện tại).
@@ -234,6 +236,7 @@ export default async function EnterReadings({
           period={period}
           defaultStart={defaults.elecStart}
           defaultEnd={inv?.elec_end ?? null}
+          prevUsed={prevUsed.elec}
           saved={res.elecState === "ok"}
           price={price}
         />
@@ -255,6 +258,7 @@ export default async function EnterReadings({
           period={period}
           defaultStart={defaults.waterStart}
           defaultEnd={inv?.water_end ?? null}
+          prevUsed={prevUsed.water}
           saved={res.waterState === "ok"}
           quota={quota}
           low={lowP}
