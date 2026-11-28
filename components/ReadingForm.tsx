@@ -148,6 +148,9 @@ export function ReadingForm(p: Props) {
   const odd =
     ok && p.prevUsed != null && p.prevUsed > 0 && used >= p.prevUsed * 4 && used - p.prevUsed >= (p.kind === "elec" ? 50 : 5);
 
+  // Mức dùng lớn bất thường (thường do đọc nhầm hoặc quên đặt số đầu): cảnh báo dù không có kỳ trước để so.
+  const huge = ok && used >= (p.kind === "elec" ? 3000 : 300);
+
   const unit = p.kind === "elec" ? "kWh" : "m³";
   const dirty =
     !p.saved ||
@@ -279,6 +282,12 @@ export function ReadingForm(p: Props) {
         >
           Số cuối nhỏ hơn số đầu. Kiểm tra lại, hoặc sửa số đầu nếu vừa đổi công
           tơ/đồng hồ.
+        </p>
+      ) : null}
+
+      {huge && !odd ? (
+        <p role="alert" className="rounded-xl bg-warn-bg p-3 text-sm font-semibold text-warn">
+          Mức dùng {fmtNum(used)} {p.kind === "elec" ? "kWh" : "m³"} lớn bất thường. Kiểm tra lại số cuối, số đầu và ảnh trước khi lưu.
         </p>
       ) : null}
 

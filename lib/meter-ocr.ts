@@ -13,11 +13,17 @@ export function meterPrompt(kind: MeterKind): string {
           "The cumulative energy in kWh is the LARGE digits on the TOP row. Leading zeros are shown (for example 00060.0 means 60.0 kWh) and the last digit after the decimal point is part of the reading.",
           "A smaller second row, if present, shows current, voltage or power with a unit such as A, V or W. Never use that row.",
         ].join(" ")
-      : "a water meter (m3). Read only the black digits of the cumulative reading, left to right, including leading zeros. Ignore the red digits and the small dials after them.";
+      : [
+          "a mechanical water meter (m3) whose digit window may be tilted or rotated in the photo, so read the digits along the length of the window from the first cell to the last.",
+          "Read only the BLACK digits (whole cubic metres), including leading zeros, for example \"0097\". Ignore the red digits and the small dials.",
+          "The thin dark slanted bars between neighbouring cells are separators of the rolling drums, NOT the digit 1; a real 1 has its own cell, so never insert a 1 between two digits. Count only real digit glyphs.",
+        ].join(" ");
+  const example = kind === "elec" ? "00060.0" : "0097";
+  const decimalHint = kind === "elec" ? "with a dot for the decimal point" : "with no decimal point";
   return [
     `The photo shows ${what}`,
-    "First look at the digit cells of that row from left to right and transcribe EVERY cell, including leading zeros. Do not skip, merge or drop a digit, and do not drop a zero that sits before the decimal point.",
-    "Return JSON only: {\"readable\": boolean, \"digits\": string|null, \"unsure\": boolean}, where digits is the transcription with a dot for the decimal point, for example \"00060.0\".",
+    "First look at the digit cells from left to right and transcribe EVERY real digit, including leading zeros. Do not skip, merge, drop or invent a digit.",
+    `Return JSON only: {"readable": boolean, "digits": string|null, "unsure": boolean}, where digits is the transcription ${decimalHint}, for example "${example}".`,
     "If the digit row is at least partly visible, always give your best transcription, even when the photo is a little blurry or small: a person will double-check it against the photo.",
     "Set unsure=true when any digit is a guess. Set readable=false and digits=null only when no digit row is visible at all or it is completely covered by glare.",
     "Do not include units. Do not read serial numbers, dates, labels or other numbers on the device.",
