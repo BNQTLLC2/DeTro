@@ -59,24 +59,49 @@ export function ReadingForm(p: Props) {
     const url = URL.createObjectURL(file);
     urlRef.current = url;
     setShot({ status: "reading", url });
+    const fail = (message: string) => {
+      if (hadPhotoValue) setEnd("");
+      setShot({ status: "error", url, message });
+    };
+    let dataUrl: string;
     try {
-      const dataUrl = await shrink(file);
+      dataUrl = await shrink(file);
+    } catch {
+      fail("Điện thoại không xử lý được ảnh này. Thử chụp lại hoặc nhập tay.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    try {
       const res = await fetch("/api/meter-read", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }),
       });
-      const j = (await res.json()) as { ok: boolean; reading?: number; message?: string };
+      let j: { ok: boolean; reading?: number; message?: string } | null = null;
+      try {
+        j = await res.json();
+      } catch {
+        /* máy chủ không trả JSON (ví dụ bị Vercel cắt vì quá thời gian) */
+      }
+      if (!j) {
+        fail(
+          res.status === 413
+            ? "Ảnh quá lớn. Hãy chụp lại."
+            : res.status === 504 || res.status === 408
+              ? "Máy chủ xử lý quá lâu nên bị ngắt. Thử lại, hoặc đổi GEMINI_MODEL sang mô hình Flash nhẹ hơn."
+              : `Máy chủ trả lỗi không đọc được (mã ${res.status}). Thử lại hoặc nhập tay.`,
+        );
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
       if (j.ok && typeof j.reading === "number") {
         setEnd(String(j.reading));
         setShot({ status: "done", url, value: j.reading });
       } else {
-        if (hadPhotoValue) setEnd("");
-        setShot({ status: "error", url, message: j.message ?? "Chưa đọc được ảnh. Hãy nhập tay." });
+        fail(j.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
       }
     } catch {
-      if (hadPhotoValue) setEnd("");
-      setShot({ status: "error", url, message: "Không kết nối được để đọc ảnh. Kiểm tra mạng hoặc nhập tay." });
+      fail("Điện thoại không gửi được ảnh lên máy chủ. Kiểm tra mạng rồi bấm Chụp lại.");
     }
     if (fileRef.current) fileRef.current.value = "";
   }

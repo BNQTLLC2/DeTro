@@ -37,6 +37,23 @@ export function parseMeterReply(data: unknown): MeterResult {
   }
 }
 
+/** Giải thích lỗi HTTP của Google bằng tiếng Việt, kèm nguyên nhân gốc để dễ sửa cấu hình. */
+async function googleError(res: Response, model: string): Promise<string> {
+  let detail = "";
+  try {
+    const j = (await res.json()) as { error?: { message?: string } };
+    detail = (j.error?.message ?? "").replace(/\s+/g, " ").slice(0, 160);
+  } catch {
+    /* không có nội dung JSON */
+  }
+  const tail = detail ? ` Google nói: ${detail}` : "";
+  if (res.status === 404) return `Google không tìm thấy mô hình "${model}". Kiểm tra lại biến GEMINI_MODEL.${tail}`;
+  if (res.status === 400 || res.status === 401 || res.status === 403) {
+    return `Google từ chối (mã ${res.status}): khóa GEMINI_API_KEY sai, bị thu hồi hoặc chưa được phép dùng mô hình này.${tail}`;
+  }
+  return `Google trả lỗi (mã ${res.status}). Thử lại sau ít phút hoặc nhập tay.${tail}`;
+}
+
 export async function readMeter(base64: string, mime: string, kind: MeterKind): Promise<MeterResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
@@ -64,9 +81,14 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
     if (res.status === 429) {
       return { ok: false, code: "quota", message: "Đã hết hạn mức đọc ảnh miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." };
     }
-    if (!res.ok) return { ok: false, code: "error", message: "Chưa đọc được ảnh lúc này. Hãy thử lại hoặc nhập tay." };
+    if (!res.ok) return { ok: false, code: "error", message: await googleError(res, model) };
     return parseMeterReply(await res.json());
-  } catch {
-    return { ok: false, code: "error", message: "Không kết nối được để đọc ảnh. Kiểm tra mạng hoặc nhập tay." };
+  } catch (err) {
+    const e = err as { name?: string; message?: string; cause?: { code?: string } };
+    if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+      return { ok: false, code: "error", message: "Google trả lời quá chậm (hơn 25 giây). Thử lại, hoặc đổi GEMINI_MODEL sang mô hình Flash nhẹ hơn." };
+    }
+    const why = [e?.cause?.code, e?.message].filter(Boolean).join(" ");
+    return { ok: false, code: "error", message: `Máy chủ không gọi được Google${why ? ` (${why.slice(0, 120)})` : ""}. Nhập tay nếu cần.` };
   }
 }
