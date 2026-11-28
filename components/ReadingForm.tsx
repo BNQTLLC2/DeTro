@@ -28,17 +28,92 @@ type Shot =
   | { status: "done"; url: string; value: number }
   | { status: "error"; url: string | null; message: string };
 
-/** Thu nhỏ ảnh về tối đa 1600px, JPEG; chữ số LCD nhỏ nên thu nhỏ quá mức sẽ làm mô hình đọc nhầm. */
-async function shrink(file: File): Promise<string> {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+type Box = { x: number; y: number; w: number; h: number };
+type Api = { ok: boolean; reading?: number; box?: Box; message?: string; code?: string };
+
+/**
+ * Vẽ một vùng (tỉ lệ 0..1) của ảnh gốc ra JPEG có cạnh dài tối đa `maxSide`.
+ * Với vùng cắt nhỏ thì phóng to (tối đa 4 lần) để chữ số đủ lớn cho mô hình; `enhance` kéo giãn tương phản
+ * vì màn hình LCD thường xám, chữ số chỉ đậm hơn nền một chút.
+ */
+function render(bmp: ImageBitmap, r: Box, maxSide: number, enhance: boolean) {
+  const sx = Math.round(r.x * bmp.width);
+  const sy = Math.round(r.y * bmp.height);
+  const sw = Math.max(1, Math.round(r.w * bmp.width));
+  const sh = Math.max(1, Math.round(r.h * bmp.height));
+  const scale = Math.min(4, maxSide / Math.max(sw, sh));
   const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale);
-  c.height = Math.round(bmp.height * scale);
-  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-  bmp.close();
-  return c.toDataURL("image/jpeg", 0.88);
+  c.width = Math.max(1, Math.round(sw * scale));
+  c.height = Math.max(1, Math.round(sh * scale));
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  if (enhance) {
+    try {
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const d = img.data;
+      const hist = new Uint32Array(256);
+      for (let i = 0; i < d.length; i += 4) {
+        const g = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
+        d[i] = g;
+        hist[g]++;
+      }
+      const total = d.length / 4;
+      const pct = (q: number) => {
+        let acc = 0;
+        for (let v = 0; v < 256; v++) {
+          acc += hist[v];
+          if (acc >= total * q) return v;
+        }
+        return 255;
+      };
+      // Khung viền trắng của vỏ đồng hồ chỉ chiếm phần nhỏ nên lấy mốc sáng ở phân vị 90.
+      const lo = pct(0.02);
+      const hi = Math.max(lo + 24, pct(0.9));
+      for (let i = 0; i < d.length; i += 4) {
+        const v = Math.max(0, Math.min(255, ((d[i] - lo) * 255) / (hi - lo)));
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+    } catch {
+      /* trình duyệt không cho đọc điểm ảnh: giữ ảnh gốc */
+    }
+  }
+  return { base64: c.toDataURL("image/jpeg", 0.9).split(",")[1], width: sw, height: sh };
 }
+
+/** Gọi máy chủ; luôn trả về một đối tượng, kể cả khi mạng hoặc máy chủ lỗi. */
+async function post(body: object): Promise<Api> {
+  try {
+    const res = await fetch("/api/meter-read", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let j: Api | null = null;
+    try {
+      j = await res.json();
+    } catch {
+      /* máy chủ không trả JSON (ví dụ bị Vercel cắt vì quá thời gian) */
+    }
+    if (j) return j;
+    return {
+      ok: false,
+      code: "error",
+      message:
+        res.status === 413
+          ? "Ảnh quá lớn. Hãy chụp lại."
+          : res.status === 504 || res.status === 408
+            ? "Máy chủ xử lý quá lâu nên bị ngắt. Bấm Chụp lại, hoặc nhập tay."
+            : `Máy chủ trả lỗi không đọc được (mã ${res.status}). Thử lại hoặc nhập tay.`,
+    };
+  } catch {
+    return { ok: false, code: "error", message: "Điện thoại không gửi được ảnh lên máy chủ. Kiểm tra mạng rồi bấm Chụp lại." };
+  }
+}
+
+/** Lỗi nặng (hết hạn mức, sai khóa, mất mạng...) thì thử ảnh khác cũng vô ích. */
+const isFatal = (r: Api) => !r.ok && r.code !== "unreadable" && r.code !== "not_found";
 
 /** Form nhập số điện hoặc nước cho một phòng, tính thử tiền ngay khi gõ. */
 export function ReadingForm(p: Props) {
@@ -63,47 +138,57 @@ export function ReadingForm(p: Props) {
       if (hadPhotoValue) setEnd("");
       setShot({ status: "error", url, message });
     };
-    let dataUrl: string;
+    let bmp: ImageBitmap;
     try {
-      dataUrl = await shrink(file);
+      bmp = await createImageBitmap(file);
     } catch {
       fail("Điện thoại không xử lý được ảnh này. Thử chụp lại hoặc nhập tay.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
     try {
-      const res = await fetch("/api/meter-read", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image: dataUrl.split(",")[1], mime: "image/jpeg", kind: p.kind }),
-      });
-      let j: { ok: boolean; reading?: number; message?: string } | null = null;
-      try {
-        j = await res.json();
-      } catch {
-        /* máy chủ không trả JSON (ví dụ bị Vercel cắt vì quá thời gian) */
-      }
-      if (!j) {
-        fail(
-          res.status === 413
-            ? "Ảnh quá lớn. Hãy chụp lại."
-            : res.status === 504 || res.status === 408
-              ? "Máy chủ xử lý quá lâu nên bị ngắt. Bấm Chụp lại, hoặc nhập tay."
-              : `Máy chủ trả lỗi không đọc được (mã ${res.status}). Thử lại hoặc nhập tay.`,
-        );
-        if (fileRef.current) fileRef.current.value = "";
+      const whole: Box = { x: 0, y: 0, w: 1, h: 1 };
+      const success = (value: number) => {
+        setEnd(String(value));
+        setShot({ status: "done", url, value });
+      };
+      let hint = ""; // lời khuyên riêng khi màn hình quá nhỏ trong ảnh
+
+      // Bước 1: nhờ mô hình chỉ ra màn hình ở đâu (ảnh tổng quan nhỏ nên rất nhanh).
+      const loc = await post({ mode: "locate", image: render(bmp, whole, 1024, false).base64, mime: "image/jpeg", kind: p.kind });
+      if (isFatal(loc)) {
+        fail(loc.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
         return;
       }
-      if (j.ok && typeof j.reading === "number") {
-        setEnd(String(j.reading));
-        setShot({ status: "done", url, value: j.reading });
-      } else {
-        fail(j.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
+
+      // Bước 2: cắt sát màn hình từ ẢNH GỐC (còn nguyên độ phân giải), phóng to, tăng tương phản rồi đọc.
+      if (loc.ok && loc.box) {
+        const b = loc.box;
+        const padX = b.w * 0.08;
+        const padY = b.h * 0.12;
+        const x = Math.max(0, b.x - padX);
+        const y = Math.max(0, b.y - padY);
+        const crop: Box = { x, y, w: Math.min(1 - x, b.w + 2 * padX), h: Math.min(1 - y, b.h + 2 * padY) };
+        const out = render(bmp, crop, 1400, true);
+        if (out.width < 300) {
+          hint = `Màn hình đồng hồ trong ảnh chỉ rộng khoảng ${out.width}px nên các chữ số bị nhòe. Hãy đưa điện thoại lại gần hơn để màn hình chiếm ít nhất 1/3 khung hình rồi chụp lại, hoặc nhập tay.`;
+        }
+        const r = await post({ image: out.base64, mime: "image/jpeg", kind: p.kind });
+        if (r.ok && typeof r.reading === "number") return success(r.reading);
+        if (isFatal(r)) {
+          fail(r.message ?? "Chưa đọc được ảnh. Hãy nhập tay.");
+          return;
+        }
       }
-    } catch {
-      fail("Điện thoại không gửi được ảnh lên máy chủ. Kiểm tra mạng rồi bấm Chụp lại.");
+
+      // Bước 3 (dự phòng): không tìm thấy màn hình hoặc đọc vùng cắt thất bại, đọc cả ảnh như trước.
+      const r2 = await post({ image: render(bmp, whole, 1600, false).base64, mime: "image/jpeg", kind: p.kind });
+      if (r2.ok && typeof r2.reading === "number") return success(r2.reading);
+      fail(hint || (r2.message ?? "Chưa đọc được ảnh. Hãy nhập tay."));
+    } finally {
+      bmp.close();
+      if (fileRef.current) fileRef.current.value = "";
     }
-    if (fileRef.current) fileRef.current.value = "";
   }
 
   const s = Number(start.replace(",", "."));

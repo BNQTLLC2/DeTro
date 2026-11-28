@@ -60,10 +60,13 @@ export function parseGroqReply(data: unknown): MeterResult {
 // Nhớ trong bộ nhớ máy chủ: nếu mô hình đã từ chối "reasoning_effort" thì các lần sau bỏ luôn tham số đó, khỏi tốn thêm một lượt gọi.
 let skipNoThinking = false;
 
-export async function readMeter(base64: string, mime: string, kind: MeterKind): Promise<MeterResult> {
+type AskError = Extract<MeterResult, { ok: false }>;
+
+/** Gửi một ảnh + câu hỏi cho Groq, trả về JSON thô của chat.completions hoặc một lỗi đã dịch sang tiếng Việt. */
+async function askGroq(prompt: string, base64: string, mime: string, maxTokens: number): Promise<{ data: unknown } | { error: AskError }> {
   const key = process.env.GROQ_API_KEY;
   if (!key) {
-    return { ok: false, code: "no_key", message: "Chưa cấu hình GROQ_API_KEY nên chưa đọc ảnh được. Hãy nhập tay." };
+    return { error: { ok: false, code: "no_key", message: "Chưa cấu hình GROQ_API_KEY nên chưa đọc ảnh được. Hãy nhập tay." } };
   }
   const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
   const call = (noThinking: boolean) =>
@@ -75,12 +78,12 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
         temperature: 0,
         response_format: { type: "json_object" },
         // Đáp án chỉ là một đoạn JSON ngắn; tắt suy nghĩ và giới hạn độ dài để trả lời nhanh nhất.
-        ...(noThinking ? { reasoning_effort: "none", max_completion_tokens: 150 } : { max_completion_tokens: 1024 }),
+        ...(noThinking ? { reasoning_effort: "none", max_completion_tokens: maxTokens } : { max_completion_tokens: 1024 }),
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", text: meterPrompt(kind) },
+              { type: "text", text: prompt },
               { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
             ],
           },
@@ -104,7 +107,7 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
       res = await call(noThinking);
     }
     if (res.status === 429) {
-      return { ok: false, code: "quota", message: "Groq báo hết hạn mức miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." };
+      return { error: { ok: false, code: "quota", message: "Groq báo hết hạn mức miễn phí lúc này. Hãy nhập tay hoặc thử lại sau ít phút." } };
     }
     if (!res.ok) {
       let detail = "";
@@ -122,18 +125,80 @@ export async function readMeter(base64: string, mime: string, kind: MeterKind): 
             : res.status === 400
               ? `mô hình "${model}" từ chối yêu cầu${rejected ? ` (${rejected})` : ""}`
               : "Groq đang lỗi hoặc quá tải";
-      return { ok: false, code: "error", message: `Groq trả lỗi mã ${res.status}: ${why}.${detail ? ` Groq nói: ${detail}` : ""}` };
+      return { error: { ok: false, code: "error", message: `Groq trả lỗi mã ${res.status}: ${why}.${detail ? ` Groq nói: ${detail}` : ""}` } };
     }
-    const first = parseGroqReply(await res.json());
-    if (first.ok) return first;
-    // Lần đầu không đọc được (mờ, JSON cụt...): thử thêm đúng một lần nữa trước khi bỏ cuộc.
-    const retry = await call(noThinking);
-    return retry.ok ? parseGroqReply(await retry.json()) : first;
+    return { data: await res.json() };
   } catch (err) {
     const e = err as { name?: string; message?: string };
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
-      return { ok: false, code: "error", message: `Groq trả lời quá chậm (đã chờ ${Math.round((Date.now() - t0) / 1000)} giây, mô hình ${model}). Bấm Chụp lại hoặc nhập tay.` };
+      return { error: { ok: false, code: "error", message: `Groq trả lời quá chậm (đã chờ ${Math.round((Date.now() - t0) / 1000)} giây, mô hình ${model}). Bấm Chụp lại hoặc nhập tay.` } };
     }
-    return { ok: false, code: "error", message: `Máy chủ không gọi được Groq${e?.message ? ` (${e.message.slice(0, 100)})` : ""}.` };
+    return { error: { ok: false, code: "error", message: `Máy chủ không gọi được Groq${e?.message ? ` (${e.message.slice(0, 100)})` : ""}.` } };
   }
+}
+
+export async function readMeter(base64: string, mime: string, kind: MeterKind): Promise<MeterResult> {
+  const prompt = meterPrompt(kind);
+  const first = await askGroq(prompt, base64, mime, 150);
+  if ("error" in first) return first.error;
+  const r1 = parseGroqReply(first.data);
+  if (r1.ok) return r1;
+  // Lần đầu không đọc được (mờ, JSON cụt...): thử thêm đúng một lần nữa trước khi bỏ cuộc.
+  const second = await askGroq(prompt, base64, mime, 150);
+  return "error" in second ? r1 : parseGroqReply(second.data);
+}
+
+// ---- Bước 1: tìm vị trí màn hình trong ảnh để cắt sát (màn hình thường chỉ chiếm 5-10% khung hình) ----
+
+/** Khung chữ nhật theo tỉ lệ 0..1 so với cả ảnh (gốc trên-trái). */
+export type Box = { x: number; y: number; w: number; h: number };
+export type LocateResult = { ok: true; box: Box } | { ok: false; code: "no_key" | "quota" | "not_found" | "error"; message: string };
+
+export function locatePrompt(kind: MeterKind): string {
+  const what =
+    kind === "elec"
+      ? "the LCD window of the electricity meter (the dark rectangle that contains the large digits and any smaller row under them)"
+      : "the window of the water meter that contains the row of digits";
+  return [
+    `Find ${what} in this photo.`,
+    "Return JSON only: {\"found\": boolean, \"box\": [x1, y1, x2, y2]}.",
+    "The coordinates are fractions between 0 and 1 of the image width and height, measured from the top-left corner, so x1<x2 and y1<y2.",
+    "The box must be tight around that window and include all of its digits. Do not box the whole device, the hand or the wires.",
+    "Set found=false and box=null if no meter display is visible.",
+  ].join(" ");
+}
+
+/** Đọc khung từ JSON mô hình trả về. Chấp nhận cả tỉ lệ 0..1 lẫn toạ độ chuẩn hoá 0..1000 (kiểu Qwen); khung vô lý thì bỏ. */
+export function parseBoxJson(text: string): Box | null {
+  try {
+    const m = /\{[\s\S]*\}/.exec(text);
+    const j = JSON.parse(m ? m[0] : text) as { found?: unknown; box?: unknown };
+    if (j.found !== true || !Array.isArray(j.box) || j.box.length !== 4 || !j.box.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+    let [x1, y1, x2, y2] = j.box as number[];
+    const top = Math.max(x1, y1, x2, y2);
+    if (top > 1.0001) {
+      if (top > 1000) return null;
+      [x1, y1, x2, y2] = [x1 / 1000, y1 / 1000, x2 / 1000, y2 / 1000];
+    }
+    const cl = (n: number) => Math.min(1, Math.max(0, n));
+    [x1, y1, x2, y2] = [cl(x1), cl(y1), cl(x2), cl(y2)];
+    const w = x2 - x1;
+    const h = y2 - y1;
+    // Màn hình phải có thật và không phải cả bức ảnh.
+    if (w < 0.02 || h < 0.01 || w * h > 0.8) return null;
+    return { x: x1, y: y1, w, h };
+  } catch {
+    return null;
+  }
+}
+
+export async function locateMeter(base64: string, mime: string, kind: MeterKind): Promise<LocateResult> {
+  const r = await askGroq(locatePrompt(kind), base64, mime, 100);
+  if ("error" in r) {
+    const e = r.error;
+    return { ok: false, code: e.code === "unreadable" ? "error" : e.code, message: e.message };
+  }
+  const d = r.data as { choices?: { message?: { content?: string } }[] };
+  const box = parseBoxJson(d?.choices?.[0]?.message?.content ?? "");
+  return box ? { ok: true, box } : { ok: false, code: "not_found", message: "Không tìm thấy màn hình đồng hồ trong ảnh." };
 }
